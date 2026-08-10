@@ -50,12 +50,49 @@ curl -fsSL https://raw.githubusercontent.com/rahmanef63/mcp-skill/main/SKILL.md 
 
 ### Option C — per-project (not global)
 
-Drop in your project's `.claude/skills/chatgpt-mcp/` instead of `~/.claude/`. The skill is then available only inside that repo.
+Drop in your project's `.claude/skills/chatgpt-mcp/` instead of `~/.claude/`. The skill is then available only inside that repo — and, if you commit it, to everyone who clones it.
 
 ```bash
 mkdir -p .claude/skills/chatgpt-mcp
 curl -fsSL https://raw.githubusercontent.com/rahmanef63/mcp-skill/main/SKILL.md \
   -o .claude/skills/chatgpt-mcp/SKILL.md
+```
+
+Skills are discovered by directory presence — there is nothing to register in `.claude/settings.json`, no plugin list, no config key.
+
+## It's additive — that's the whole design
+
+The skill is one Markdown file Claude reads. It has no runtime, imports nothing, and is imported by nothing.
+
+**Its entire footprint in your repo:**
+
+```
+.claude/skills/chatgpt-mcp/SKILL.md
+```
+
+| Never touched | Why it matters |
+|---|---|
+| `package.json`, lockfiles | no dependency to audit, nothing to bump |
+| `.claude/settings.json`, `.mcp.json` | nothing points at the skill, so nothing can dangle |
+| `.gitignore`, CI config, build scripts | your pipeline can't know it exists |
+| any source file | the recipe tells *you* what to write; it writes nothing itself |
+
+**Uninstall:**
+
+```bash
+rm -rf .claude/skills/chatgpt-mcp          # per-project
+rm -rf ~/.claude/skills/chatgpt-mcp        # global
+```
+
+That is the complete removal. `git status` goes back to clean and the repo is byte-identical to before — verified on a fresh repo, install then uninstall, `git diff` empty and HEAD unchanged.
+
+**Code you already shipped with its help keeps working.** The MCP server the recipe walks you through is ordinary code in your own repo — routes, Convex functions, a schema. It has no link back to the skill. Delete the skill and the server keeps serving; the only thing you lose is the recipe for the *next* one.
+
+**Check whether your copy has drifted from upstream:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rahmanef63/mcp-skill/main/SKILL.md \
+  | diff - .claude/skills/chatgpt-mcp/SKILL.md && echo "up to date"
 ```
 
 ## Verify the install
