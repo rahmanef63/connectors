@@ -85,6 +85,7 @@ The skill auto-activates on any of these (you don't need to type `/chatgpt-mcp`)
 - `ChatGPT custom app`
 - `expose tools to ChatGPT` / `expose tools to AI`
 - `build MCP for Convex`
+- `MCP server does not implement OAuth` (the error string ChatGPT shows you)
 
 ## What's in the recipe
 
@@ -96,7 +97,7 @@ The skill auto-activates on any of these (you don't need to type `/chatgpt-mcp`)
 - **Pagination + response-shape symmetry** — the bug class TypeScript can't catch
 - **Anti-abuse layering** — per-minute burst + per-day cap + AI token quota per user
 - **Always-allow reality check** — MCP spec has no server flag for it; what actually works
-- **Security checklist** — 12 items to verify before opening to ChatGPT
+- **Security checklist** — 13 items to verify before opening to ChatGPT
 - **Tool catalog template** — copy-paste tool signatures by op-type
 - **ChatGPT connector form mapping** — exact field-by-field values to paste
 - **16 pitfalls** with symptoms + root cause + fix
@@ -110,17 +111,17 @@ The skill auto-activates on any of these (you don't need to type `/chatgpt-mcp`)
 | **Hono / Express / SvelteKit** | ✅ MCP endpoint is just `POST(json) → json` |
 | **Bun runtime** | ✅ ALS API identical |
 | **Cloudflare Workers** | ⚠ Needs nodejs compat shim for AsyncLocalStorage |
-| **Convex self-hosted** | ✅ Convex-specific section walks the SITE/CLOUD split + the 4 isolate-level gotchas |
+| **Convex self-hosted** | ✅ Convex-specific section walks the SITE/CLOUD split + the Convex isolate gotchas |
 
 ## Security posture
 
 - **No secrets in the skill itself.** Everything you set up is your own keys (`MCP_API_KEY`, `JWT_PRIVATE_KEY`, OAuth client config) under your control.
 - **PKCE S256 only**, `plain` rejected.
-- **Auth codes single-use, 5-min TTL, consumed-before-mint** to prevent race-window double-issuance.
+- **Auth codes single-use, 5-min TTL, deleted before the token is minted** to prevent race-window double-issuance (and to keep the table from growing forever).
 - **Access tokens revocable** server-side; immediate effect on next MCP call.
 - **redirect_uri host allowlist** (chatgpt.com / chat.openai.com / platform.openai.com) so attackers can't phish through your consent page.
 - **Per-minute + per-day rate limits** on write tools; AI token quota for tools that fan out to upstream LLMs.
-- **Admin/setup UI strips raw token values** — only `abc12345…ef9d` previews leave the DB.
+- **Tokens + auth codes stored as sha256** — the raw value is shown exactly once, at mint; the DB never holds it, so there is nothing for the admin UI to strip.
 
 The skill's security checklist is the final gate before opening your MCP endpoint to public clients.
 
@@ -131,6 +132,8 @@ This repo is updated as new gotchas surface. To pull the latest recipe:
 ```bash
 cd ~/.claude/skills/chatgpt-mcp && git pull
 ```
+
+Installed with Option B or C? Re-run the same `curl` — it overwrites the file in place.
 
 No code changes in your project — just the recipe Claude reads.
 

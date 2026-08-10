@@ -1,6 +1,6 @@
 ---
 name: chatgpt-mcp
-description: Add a ChatGPT/Claude/Cursor-controllable MCP server (bearer + OAuth 2.1 PKCE + admin UI) to a Next.js or Convex project so MCP-aware clients can call CRUD tools via natural language. Trigger on /chatgpt-mcp, "add MCP server", "ChatGPT connector", "Claude connector", "OAuth PKCE for MCP", "ChatGPT custom app", "expose tools to ChatGPT", "expose tools to AI", "build MCP for Convex".
+description: Add a ChatGPT/Claude/Cursor-controllable MCP server (bearer + OAuth 2.1 PKCE + admin UI) to a Next.js or Convex project so MCP-aware clients can call CRUD tools via natural language. Trigger on /chatgpt-mcp, "add MCP server", "ChatGPT connector", "Claude connector", "OAuth PKCE for MCP", "ChatGPT custom app", "expose tools to ChatGPT", "expose tools to AI", "build MCP for Convex", "MCP server does not implement OAuth".
 ---
 
 # ChatGPT MCP Integration (bearer + OAuth 2.1)
@@ -12,7 +12,7 @@ Two host shapes are covered:
 - **Next.js + custom auth** — single-tenant admin-gated, MCP endpoint at `/api/mcp`, OAuth on Next routes.
 - **Convex self-hosted + `@convex-dev/auth`** — multi-user, per-user OAuth + per-user static-bearer tokens, MCP at the SITE origin via `httpRouter`.
 
-The Convex-specific gotchas in the next section bit hard in real deployments — read them first if your backend is Convex.
+The Convex-specific gotchas below bit hard in real deployments — read them first if your backend is Convex.
 
 ## Decision tree (run first)
 
@@ -28,8 +28,10 @@ Always build bearer first — keeps a dev escape hatch after OAuth lands.
 
 Generate secret: `openssl rand -hex 32`. Set in BOTH places (frontend env + backend env, e.g. Convex `npx convex env set MCP_API_KEY <hex>`).
 
+Multi-tenant apps can skip the env secret entirely and mint per-user DB-backed tokens from day one — no standing shared credential to keep in sync across two runtimes (then pitfall #3 and checklist item 1 don't apply).
+
 Files to create (paths from the Next.js shape — adapt for your framework):
-- `app/api/mcp/route.ts` — POST handler, JSON-RPC dispatch, bearer check, batched array support
+- `app/api/mcp/route.ts` — POST handler, JSON-RPC dispatch, bearer check
 - `frontend/shared/lib/mcp/types.ts` — `JsonRpcRequest|Response`, `ToolDef`, `RPC_ERROR` constants
 - `frontend/shared/lib/mcp/server.ts` — `dispatchJsonRpc()` handling `initialize`, `notifications/*`, `ping`, `tools/list`, `tools/call`
 - `frontend/shared/lib/mcp/auth.ts` — `extractBearer`, `tokenMatches` (constant-time-ish), `isAuthorized`
@@ -44,7 +46,7 @@ For Convex backend, the equivalent files are:
 - `convex/mcp/wellKnown.ts` — `.well-known/*` httpActions
 - `convex/_shared/pkce.ts` — PKCE helpers (S256, base64url)
 
-Protocol version: `"2024-11-05"`. Server caps: `{ tools: { listChanged: false } }`. Notifications (id null/undefined) → return `null` → respond 202.
+Protocol version: echo back `params.protocolVersion` when you support it, else return your newest (`"2024-11-05"` is still accepted by every shipping client). Server caps: `{ tools: { listChanged: false } }`. Notifications (id null/undefined) → return `null` → respond 202.
 
 **Tool errors stay inside `result`** with `isError: true` + text content. Never bubble handler exceptions to JSON-RPC `error` — ChatGPT hides protocol errors from the user.
 
@@ -63,13 +65,16 @@ curl -X POST $BASE/api/mcp \
 
 ## Phase 2 — OAuth 2.1 + PKCE
 
-ChatGPT custom-app form only offers OAuth dropdown. Use **User-Defined Client** registration (no DCR/CIMD needed).
+Two client-registration paths:
+
+- **ChatGPT custom app** — the form only offers the OAuth dropdown. Use **User-Defined Client** registration (no DCR/CIMD needed).
+- **Claude.ai / `mcp-remote` / Cursor** — these expect Dynamic Client Registration. Add `POST /oauth/register` (RFC 7591) and advertise `registration_endpoint` in AS metadata: https-only `redirect_uris`, dedupe on an identical redirect-URI set instead of re-registering, cap the list (~8) per client.
 
 Flow: `consent page → mint code (5-min TTL, PKCE S256 challenge stored) → ChatGPT POSTs /api/oauth/token w/ code_verifier → validate PKCE → mint access_token (1-year, revocable)`.
 
-Schema (two tables):
-- `oauthCodes` — `code, codeChallenge, codeChallengeMethod, redirectUri, clientId, scope, resource, userId, expiresAt, consumed, createdAt`. Index `by_code`.
-- `oauthAccessTokens` — `token, userId, clientId, scope, resource, expiresAt, createdAt, lastUsedAt, revokedAt, label`. Index `by_token`.
+Schema (two tables) — **store the sha256 of both; the raw code/token exist only in flight**:
+- `oauthCodes` — `codeHash, codeChallenge, codeChallengeMethod, redirectUri, clientId, scope, resource, userId, expiresAt, createdAt`. Index `by_code_hash`.
+- `oauthAccessTokens` — `tokenHash, userId, clientId, scope, resource, expiresAt, createdAt, lastUsedAt, revokedAt, label`. Index `by_hash`.
 
 PKCE helpers (`pkce.ts`): `sha256Base64Url`, `randomHex`, `verifyPkce`. Base64url = `+→-`, `/→_`, strip `=`. Reject `plain` method. Verifier 43-128 chars (RFC 7636 §4.1).
 
@@ -80,7 +85,7 @@ Routes:
 - `app/.well-known/oauth-authorization-server/route.ts` — RFC 8414 metadata. `revalidate = 3600`.
 - `app/.well-known/oauth-protected-resource/route.ts` — RFC 9728 metadata.
 
-`exchangeCode` mutation must **patch `consumed: true` BEFORE inserting the token** — otherwise a retry races and double-issues.
+`exchangeCode` mutation must **delete the code row BEFORE inserting the token** — otherwise a retry races and double-issues. Delete rather than patch a `consumed` flag: a replay still gets `invalid_grant` (no row), and the table stops growing forever.
 
 Extend `requireAuth` (or `requireAdmin`, depending on your model) to accept multiple token types:
 1. `MCP_API_KEY` env match → synthetic service-account user
@@ -95,10 +100,10 @@ Convex equivalent: resolve `userId` from bearer in the route handler ONCE, then 
 
 Three sections:
 1. **Setup card** — copy-to-clipboard fields matching ChatGPT form labels verbatim (MCP Server URL, Auth URL, Token URL, Resource, Client ID hint, "leave Secret empty"). Eliminates separate onboarding doc. Pro UX: tabs per MCP client (ChatGPT / Claude / Others) — each tab shows that client's setup recipe (web OAuth flow, JSON config snippet for desktop apps using `mcp-remote`, etc.).
-2. **Tokens table** — masked preview (`abc12345…ef9d`), status badge (active/expired/revoked), `createdAt`, `lastUsedAt`, `expiresAt`, Revoke button.
+2. **Tokens table** — `label`, status badge (active/expired/revoked), `createdAt`, `lastUsedAt`, `expiresAt`, Revoke button.
 3. **Env note** — call out `MCP_API_KEY` exists as dev fallback (not in table).
 
-`adminList` (or `listMine` for per-user) query **strips raw token values** — only returns `tokenPreview = token.slice(0,8) + "…" + token.slice(-4)`. Token material never leaves DB.
+`adminList` (or `listMine` for per-user) returns `label, createdAt, lastUsedAt, status` — there is no raw token to strip, the DB only ever held the sha256. Show the raw token exactly once, at mint.
 
 For per-user (not admin-only) mode: the same UI lives under user settings instead of admin. Tokens table filters by current `userId` via a `by_user` index.
 
@@ -188,7 +193,7 @@ dispatcher:   destructures { items, nextCursor, total } and maps verbatim
 Multi-user MCP is a cost-attack surface (entity spam + AI token burn). Layer:
 - **Per-minute burst** — `rateLimits` table per `(userId, scope)`. e.g. `pages.create: 60/min`.
 - **Per-day cap** — second `rateLimits` bucket with `windowMs: 86_400_000`. e.g. `pages.create.day: 800/day`. Stops slow-brute pacing under the burst cap.
-- **AI token quota** — separate `aiTokenUsage` table keyed by `(userId, dayKey)`. Check BEFORE invoking upstream LLM, record after each hop. Default e.g. 200k tokens/day, env-tunable (`AI_DAILY_TOKEN_CAP`).
+- **AI token quota** — separate `aiTokenUsage` table keyed by `(userId, dayKey)`. Check BEFORE invoking upstream LLM, record after each hop. Default e.g. 200k tokens/day, env-tunable (`AI_DAILY_TOKEN_CAP`). On a BYOK gateway (the user's own upstream key, never your bill) the right currency is a per-tenant **spend** budget instead — but only if it is defaulted ON; an opt-in cap is not a quota.
 
 Sizing: daily ≈ 10× heaviest legitimate user. Per-minute unchanged.
 
@@ -200,7 +205,7 @@ Sizing: daily ≈ 10× heaviest legitimate user. Per-minute unchanged.
 4. **PKCE method** — refuse `plain`, S256 only.
 5. **Verifier length** — 43..128, reject outside.
 6. **base64url ≠ base64** — `+→-`, `/→_`, strip `=`. Standard base64 silently produces wrong challenges.
-7. **Consume code before mint** — patch `consumed:true` first, insert token second.
+7. **Consume code before mint** — delete the code row first, insert token second. A `consumed:true` patch works but grows the table forever.
 8. **Tool errors → `result.isError`** — NOT JSON-RPC `error` object.
 9. **AsyncLocalStorage > prop drilling (Next)** — skip ALS and every handler threads bearer manually. For Convex, equivalent is "resolve `userId` from bearer in route handler, pass to internal mutations as arg".
 10. **Discovery cache headers** — `cache-control: public, max-age=3600` on `.well-known/*`.
@@ -228,23 +233,23 @@ User clicks "always allow this tool" in client UI once per tool. That's the actu
 - [ ] `MCP_API_KEY` ≥ 32 hex chars
 - [ ] Bearer compare constant-time-ish (same-length first)
 - [ ] PKCE verifier 43..128, S256 only
-- [ ] `redirect_uri` HTTPS-validated at consent page + host allowlist for known clients (chatgpt.com / chat.openai.com / platform.openai.com)
+- [ ] `redirect_uri` HTTPS-validated at consent page + host allowlist for known clients (chatgpt.com / chat.openai.com / platform.openai.com) — pre-registered clients only; under open DCR use a consent page that renders the destination host and marks the client name as self-reported
 - [ ] Auth codes single-use, ≤5 min TTL
 - [ ] Access tokens have `expiresAt` + `revokedAt`
-- [ ] `adminList`/`listMine` returns preview only, never raw token
+- [ ] Tokens + auth codes stored as sha256; raw value returned exactly once, at mint
 - [ ] OAuth tokens re-validated as active on every check
 - [ ] 401 response includes `www-authenticate: Bearer realm="..."` + `resource_metadata` hint
 - [ ] No raw secrets in tool handler output
 - [ ] Service-account env bypass opt-in (skip when env unset)
 - [ ] Per-minute + per-day rate limits on every write tool
-- [ ] AI token quota per user per day if any tool fans out to an LLM
+- [ ] AI token quota per user per day if any tool fans out to an LLM (BYOK: a per-tenant spend budget, defaulted ON)
 
 ## Adaptation notes
 
-- **Different DB** — Drizzle/Prisma/Supabase. PKCE/token logic DB-agnostic; need `byToken` + `byCode` lookups + atomic `consumed` patch.
+- **Different DB** — Drizzle/Prisma/Supabase. PKCE/token logic DB-agnostic; need `byHash` + `byCodeHash` lookups + an atomic delete-on-exchange.
 - **Different framework** — Hono/Express/SvelteKit. MCP endpoint is just `POST(json) → json`. Same dispatcher works.
 - **Bun** — ALS API identical. **Cloudflare Workers** — needs nodejs compat shim for ALS.
-- **Multi-tenant** — scope `userId` to tenant, add `tenantId` to ALS context (or arg on Convex), filter tool queries by tenant from token.
+- **Multi-tenant** — scope `userId` to tenant, add `tenantId` to ALS context (or arg on Convex), filter tool queries by tenant from token. Re-check membership on EVERY call, not just at mint — that is what kills a live bearer the instant a member is removed. And OAuth-minted tokens have no tenant picker: decide up front between defaulting to the personal tenant and putting a selector on the consent page.
 - **Per-user (not admin-only)** — switch `createCode` from `requireAdmin` to `requireAuth`. Every authed user mints OAuth codes for their own scope. `revokeToken` becomes owner-check (`row.userId === me`) instead of admin. Tokens query becomes `listMine` (filter by_user index) instead of `adminList`.
 - **No admin auth** — build email+password (bcrypt/argon2/PBKDF2) first; consent page needs someone to authorize on behalf of.
 - **Editor-style apps** — add block-aware tools the LLM can't fake via markdown: inline DB embed, column layouts, mention insertion, snapshot, slash-command shortcuts. Each as its own narrow tool with WHEN-TO-USE description.
