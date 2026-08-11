@@ -1,63 +1,61 @@
 ---
 name: chatgpt-mcp
-description: Add a ChatGPT/Claude/Cursor-controllable MCP server (bearer + OAuth 2.1 PKCE + admin UI) to a Next.js or Convex project so MCP-aware clients can call CRUD tools via natural language. Trigger on /chatgpt-mcp, "add MCP server", "ChatGPT connector", "Claude connector", "OAuth PKCE for MCP", "ChatGPT custom app", "expose tools to ChatGPT", "expose tools to AI", "build MCP for Convex", "MCP server does not implement OAuth".
+description: Build ONE MCP server your app exposes to every AI host — ChatGPT apps/connectors, Claude.ai, Claude Code, Cursor, Cline, mcp-remote — with OAuth 2.1 PKCE, hashed bearers and an admin UI. Trigger on /chatgpt-mcp, "add MCP server", "ChatGPT connector", "Claude connector", "Cursor MCP", "OAuth PKCE for MCP", "ChatGPT custom app", "expose tools to ChatGPT", "expose tools to AI", "expose my app to an AI agent", "build MCP for Convex", "MCP server does not implement OAuth".
 ---
 
-# ChatGPT MCP Integration (bearer + OAuth 2.1)
+# One MCP server, every AI host
 
-Hand-rolled MCP server (~500 LOC, no SDK) + OAuth 2.1 PKCE in front of it so MCP-aware clients (ChatGPT custom apps, Claude.ai web, Cursor, Cline, `mcp-remote` stdio bridge) can talk to it.
+You build **one** remote MCP endpoint. ChatGPT, Claude.ai, Cursor and the rest all speak the same protocol to it. Nobody ships a per-vendor server — Notion, Stripe, Linear and GitHub each expose a single hosted endpoint and let every host connect. Vendor differences live in **how a client registers**, never in your server.
 
-Two host shapes are covered:
+That is the whole design. If you find yourself branching on which AI is calling, stop — you have taken a wrong turn.
 
-- **Next.js + custom auth** — single-tenant admin-gated, MCP endpoint at `/api/mcp`, OAuth on Next routes.
-- **Convex self-hosted + `@convex-dev/auth`** — multi-user, per-user OAuth + per-user static-bearer tokens, MCP at the SITE origin via `httpRouter`.
+**Non-negotiables** (every host assumes them): remote HTTPS, OAuth 2.1 + PKCE S256, tokens hashed at rest, tool errors inside `result`.
 
-The Convex-specific gotchas below bit hard in real deployments — read them first if your backend is Convex.
+## Read this much, then stop
+
+| You are | Read |
+|---|---|
+| Anyone | this file, top to bottom (~5 min) |
+| Wiring a specific client | `references/clients.md` |
+| Designing the tool surface | `references/tool-design.md` ← **highest leverage, most-skipped** |
+| Implementing the OAuth half | `references/oauth.md` |
+| Choosing/serving the transport | `references/transport.md` |
+| On Convex | `references/convex.md` — **read before writing code** |
+| Debugging something broken | `references/pitfalls.md` (16 real ones) |
+
+Load only what applies. Reading all of it costs tokens you want for the build.
 
 ## Decision tree (run first)
 
 | Need | Build |
 |---|---|
-| Curl/script automation, internal only | **Phase 1 only** (bearer). 30 min, 1 env var. |
-| ChatGPT custom app | **Phase 1 + 2** (bearer + OAuth). ChatGPT form has no API-key field — OAuth mandatory. |
-| Production w/ revocable per-user tokens | **Phase 1 + 2 + 3** (admin UI / user-settings UI). |
+| Curl/script automation, internal only | **Phase 1 only** (bearer). ~30 min, one env var. |
+| Any consumer AI host (ChatGPT, Claude.ai, Cursor) | **Phase 1 + 2**. Their forms have no API-key field — OAuth is mandatory. |
+| Production, revocable per-user access | **Phase 1 + 2 + 3** (admin / user-settings UI). |
 
-Always build bearer first — keeps a dev escape hatch after OAuth lands.
+Always build bearer first — it stays as your dev escape hatch after OAuth lands.
 
-## Phase 1 — MCP bearer server
+## Phase 1 — the MCP server
 
-Generate secret: `openssl rand -hex 32`. Set in BOTH places (frontend env + backend env, e.g. Convex `npx convex env set MCP_API_KEY <hex>`).
+One endpoint: `POST /mcp` → JSON-RPC in, JSON-RPC out. Handle `initialize`, `tools/list`, `tools/call`, `ping`, and ack `notifications/*`. That is the entire protocol surface most servers need.
 
-Multi-tenant apps can skip the env secret entirely and mint per-user DB-backed tokens from day one — no standing shared credential to keep in sync across two runtimes (then pitfall #3 and checklist item 1 don't apply).
+Single-tenant? Generate `openssl rand -hex 32`, set it in **both** runtimes (frontend env AND backend env — e.g. `npx convex env set MCP_API_KEY <hex>`). Multi-tenant? Skip the shared secret entirely and mint per-user DB-backed tokens from day one — then pitfall #3 and checklist item 1 stop applying to you.
 
-Files to create (paths from the Next.js shape — adapt for your framework):
-- `app/api/mcp/route.ts` — POST handler, JSON-RPC dispatch, bearer check
-- `frontend/shared/lib/mcp/types.ts` — `JsonRpcRequest|Response`, `ToolDef`, `RPC_ERROR` constants
-- `frontend/shared/lib/mcp/server.ts` — `dispatchJsonRpc()` handling `initialize`, `notifications/*`, `ping`, `tools/list`, `tools/call`
-- `frontend/shared/lib/mcp/auth.ts` — `extractBearer`, `tokenMatches` (constant-time-ish), `isAuthorized`
-- `frontend/shared/lib/mcp/context.ts` — `AsyncLocalStorage` for per-request token
-- `frontend/shared/lib/mcp/backend-client.ts` — `mcpQuery`, `mcpAdminMutation` pulling token from ALS
-- `frontend/shared/lib/mcp/tools/<surface>.ts` — one file per domain (`pages.ts`, `databases.ts`, ...)
+Typical layout (Next.js shape — adapt freely; the endpoint is just `POST(json) → json`):
 
-For Convex backend, the equivalent files are:
-- `convex/http.ts` — `httpRouter` route for `POST /mcp`
-- `convex/mcp/jsonrpc.ts` — dispatcher + tool catalog
-- `convex/mcp/internal.ts` — internal queries/mutations that take `userId` arg
-- `convex/mcp/wellKnown.ts` — `.well-known/*` httpActions
-- `convex/_shared/pkce.ts` — PKCE helpers (S256, base64url)
+- `app/api/mcp/route.ts` — POST handler, bearer check, dispatch
+- `lib/mcp/types.ts` — `JsonRpcRequest|Response`, `ToolDef`, error constants
+- `lib/mcp/server.ts` — `dispatchJsonRpc()`
+- `lib/mcp/auth.ts` — `extractBearer`, `isAuthorized`
+- `lib/mcp/tools/<surface>.ts` — one file per domain
 
-Protocol version: echo back `params.protocolVersion` when you support it, else return your newest (`"2024-11-05"` is still accepted by every shipping client). Server caps: `{ tools: { listChanged: false } }`. Notifications (id null/undefined) → return `null` → respond 202.
+**Store only `sha256(token)`.** The raw bearer is shown to the user exactly once, at mint. A database dump must contain no usable credential — and then there is nothing for an admin list to redact.
 
-**Tool errors stay inside `result`** with `isError: true` + text content. Never bubble handler exceptions to JSON-RPC `error` — ChatGPT hides protocol errors from the user.
-
-Tool annotation semantics ChatGPT acts on: `readOnlyHint` (skip confirmation), `destructiveHint` (extra confirmation), `idempotentHint` (safe retry), `openWorldHint` (touches external svc).
-
-Snake_case tool names. Descriptions are model-facing — write them like prompt context: include slug rules, default behaviour, when to flip booleans. `"Create a blog post. Slug must be unique kebab-case. Set published=true to make it live."` beats `"Create blog post"`.
+**Tool errors stay inside `result`** with `isError: true` and text content. Never bubble a handler exception into the JSON-RPC `error` envelope — hosts hide protocol errors from the user, so your careful message vanishes. Reserve `error` for protocol faults (unknown method, unknown tool, bad args → `-32602`).
 
 Smoke test:
 ```bash
-curl -X POST $BASE/api/mcp \
-  -H "authorization: Bearer $MCP_API_KEY" \
+curl -X POST $BASE/mcp -H "authorization: Bearer $TOKEN" \
   -H "content-type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize"}'
 # then tools/list, then tools/call
@@ -65,225 +63,45 @@ curl -X POST $BASE/api/mcp \
 
 ## Phase 2 — OAuth 2.1 + PKCE
 
-Two client-registration paths:
+Full recipe in `references/oauth.md`. The shape:
 
-- **ChatGPT custom app** — the form only offers the OAuth dropdown. Use **User-Defined Client** registration (no DCR/CIMD needed).
-- **Claude.ai / `mcp-remote` / Cursor** — these expect Dynamic Client Registration. Add `POST /oauth/register` (RFC 7591) and advertise `registration_endpoint` in AS metadata: https-only `redirect_uris`, dedupe on an identical redirect-URI set instead of re-registering, cap the list (~8) per client.
+`consent page → mint code (short TTL, PKCE S256 challenge stored) → client POSTs /oauth/token with code_verifier → verify → mint access token`
 
-Flow: `consent page → mint code (5-min TTL, PKCE S256 challenge stored) → ChatGPT POSTs /api/oauth/token w/ code_verifier → validate PKCE → mint access_token (1-year, revocable)`.
+Two tables, **both storing only sha256**: auth codes (delete the row on exchange, never a `consumed` flag) and access tokens. Serve `/.well-known/oauth-protected-resource` (RFC 9728) and `/.well-known/oauth-authorization-server` (RFC 8414) — and see pitfall #12 for *where* they must live.
 
-Schema (two tables) — **store the sha256 of both; the raw code/token exist only in flight**:
-- `oauthCodes` — `codeHash, codeChallenge, codeChallengeMethod, redirectUri, clientId, scope, resource, userId, expiresAt, createdAt`. Index `by_code_hash`.
-- `oauthAccessTokens` — `tokenHash, userId, clientId, scope, resource, expiresAt, createdAt, lastUsedAt, revokedAt, label`. Index `by_hash`.
+## Phase 3 — admin / settings UI
 
-PKCE helpers (`pkce.ts`): `sha256Base64Url`, `randomHex`, `verifyPkce`. Base64url = `+→-`, `/→_`, strip `=`. Reject `plain` method. Verifier 43-128 chars (RFC 7636 §4.1).
+1. **Setup card** — copy-to-clipboard fields, one tab per client (see `references/clients.md`). This replaces a separate onboarding doc.
+2. **Tokens table** — `label`, status, `createdAt`, `lastUsedAt`, `expiresAt`, Revoke. No token preview: only the digest exists.
+3. **Env note** — say plainly that `MCP_API_KEY` is a dev fallback and is not in the table.
 
-Routes:
-- `app/oauth/authorize/page.tsx` — client component, reads current user from your auth context, calls `createCode` mutation, redirects to `redirect_uri?code=...&state=...`. Bounces to `/login?next=` when unauthed.
-- `app/oauth/layout.tsx` — wrap in the same providers that the auth tree uses. **Otherwise `useAuth must be used within AuthProvider` throws** (pitfall #1).
-- `app/api/oauth/token/route.ts` — accept `application/x-www-form-urlencoded` AND `application/json`. Validate `grant_type=authorization_code`, all required fields, return OAuth error codes (`invalid_grant`, `invalid_request`, `unsupported_grant_type`).
-- `app/.well-known/oauth-authorization-server/route.ts` — RFC 8414 metadata. `revalidate = 3600`.
-- `app/.well-known/oauth-protected-resource/route.ts` — RFC 9728 metadata.
+## Security checklist (the gate before you expose it)
 
-`exchangeCode` mutation must **delete the code row BEFORE inserting the token** — otherwise a retry races and double-issues. Delete rather than patch a `consumed` flag: a replay still gets `invalid_grant` (no row), and the table stops growing forever.
-
-Extend `requireAuth` (or `requireAdmin`, depending on your model) to accept multiple token types:
-1. `MCP_API_KEY` env match → synthetic service-account user
-2. Existing session row (admin or regular user)
-3. `oauthAccessTokens` row where `!revokedAt && expiresAt >= now` → look up the linked user
-
-AsyncLocalStorage pattern (Next.js): route handler calls `setMcpContext({ token: bearer })` before dispatch; `mcpAdminMutation` reads via `getMcpToken()`. Eliminates threading bearer through every handler.
-
-Convex equivalent: resolve `userId` from bearer in the route handler ONCE, then call **internal mutations** that take `userId: v.id("users")` as an explicit arg + check ownership inline (`if (doc.userId !== args.userId) throw`). Convex isolate has no ALS-equivalent that survives across mutation hops.
-
-## Phase 3 — Admin / Settings UI
-
-Three sections:
-1. **Setup card** — copy-to-clipboard fields matching ChatGPT form labels verbatim (MCP Server URL, Auth URL, Token URL, Resource, Client ID hint, "leave Secret empty"). Eliminates separate onboarding doc. Pro UX: tabs per MCP client (ChatGPT / Claude / Others) — each tab shows that client's setup recipe (web OAuth flow, JSON config snippet for desktop apps using `mcp-remote`, etc.).
-2. **Tokens table** — `label`, status badge (active/expired/revoked), `createdAt`, `lastUsedAt`, `expiresAt`, Revoke button.
-3. **Env note** — call out `MCP_API_KEY` exists as dev fallback (not in table).
-
-`adminList` (or `listMine` for per-user) returns `label, createdAt, lastUsedAt, status` — there is no raw token to strip, the DB only ever held the sha256. Show the raw token exactly once, at mint.
-
-For per-user (not admin-only) mode: the same UI lives under user settings instead of admin. Tokens table filters by current `userId` via a `by_user` index.
-
-## ChatGPT connector form (exact mapping)
-
-Settings → Connectors → New App:
-
-| Field | Value |
-|---|---|
-| MCP Server URL | `https://MCP_ORIGIN/mcp` (on Convex this is the SITE origin) |
-| Authentication | `OAuth` |
-| Registration method | `User-Defined OAuth Client` |
-| Client ID | any string (`chatgpt-yourapp`) |
-| Client Secret | *empty* |
-| Token endpoint auth method | `none` |
-| Auth URL | `https://FRONTEND/oauth/authorize` |
-| Token URL | `https://FRONTEND/api/oauth/token` |
-| Authorization server base | `https://FRONTEND` |
-| Resource | `https://MCP_ORIGIN/mcp` |
-
-**Verify discovery before clicking Create** — curl both `.well-known/*` endpoints. If they 404, route files in wrong place (note: `.well-known` is a literal `app/` folder in Next.js).
-
-## Convex-specific (read FIRST if backend = Convex self-hosted)
-
-These are NOT in the Next.js-only recipe.
-
-1. **SITE vs CLOUD origin split** — Self-hosted Convex exposes TWO domains. `api-<app>.<host>` = CLOUD (queries + mutations only). `site-<app>.<host>` = SITE (where `httpRouter` mounts — `/mcp`, `/.well-known/*`, custom `httpAction` routes). The MCP URL advertised to ChatGPT MUST be the **SITE** origin. The CLOUD origin will 404 for `/mcp`. Memory hook: api = data, site = HTTP.
-
-2. **`.well-known/*` MUST live at MCP origin (= SITE origin on Convex)** — RFC 9728. ChatGPT's first discovery probe is at the MCP URL's host. If you only mirror the JSON at your frontend host, ChatGPT throws "MCP server does not implement OAuth". Mirror PR + AS metadata at the SITE origin too (both — some clients fetch both well-knowns at resource origin):
-
-   ```ts
-   // convex/mcp/wellKnown.ts
-   export const protectedResourceMetadata = httpAction(async () => json({
-     resource: "https://site-<app>.<host>/mcp",
-     authorization_servers: ["https://<frontend>"],
-     scopes_supported: ["mcp.read", "mcp.write"],
-     bearer_methods_supported: ["header"],
-   }));
-   // Wire in convex/http.ts:
-   //   http.route({ path: "/.well-known/oauth-protected-resource", method: "GET", handler: ... });
-   //   http.route({ path: "/.well-known/oauth-authorization-server", method: "GET", handler: ... });
-   ```
-
-3. **Convex `internalMutation` rejects dynamic imports** — `await import("./_shared/markdown")` throws `dynamic module import unsupported` inside internal mutations even though it works in public mutations (different bundling path). Always use STATIC top-level imports in internal mutations. Won't surface until first call.
-
-4. **`requireAuth` is empty in MCP context** — Bearer auth is resolved in the HTTP layer; the action's `getAuthUserId(ctx)` returns null because there's no `@convex-dev/auth` session cookie. Public mutations that call `requireAuth` throw "Not signed in". Pattern: resolve `userId` from bearer once in the route handler, then call **internal** mutations that take `userId: v.id("users")` as an explicit arg + check ownership inline.
-
-5. **Stamp `workspaceId` on every insert (multi-workspace apps)** — Sidebar/library filter via `by_workspace` index. MCP-created pages/rows/databases without `workspaceId` exist on disk but are INVISIBLE in the UI. Use a `getActiveWorkspaceMutation(ctx, userId)` helper that resolves saved active OR falls back to personal + auto-creates personal if missing. Apply to every `createPage`, `createRow`, `createDatabase`, `duplicatePage` etc.
-
-6. **Property-name ↔ id translation in dispatcher (database-shaped tools)** — Notion-style DB props have stable internal `id` but the LLM thinks by property `name`. Dispatcher needs a `mapPropsByName()` helper that translates both directions. Title is special — usually stored on the page record, NOT in `rowProps`. Route it out separately.
-
-7. **Block-aware tools for editor primitives** — Some features can't be markdown:
-    - **Inline database embed** → `pages_embed_database(pageId, dbId)` inserts a `database` block. The LLM WILL default to markdown table without this.
-    - **Side-by-side columns** → `pages_append_columns(pageId, columns: string[])` creates a `layouts` entry + stamps each column's blocks with `layoutGroup` + `layoutCol`. Without this the AI stacks everything vertically.
-    - **One-shot composite** → `databases_create_inline(pageId, name, properties)` does create + embed in one call. Reduces partial-failure surface.
-
-8. **Per-resource native CRUD beats one mega-tool** — Don't try to satisfy databases via `pages_*`. Separate native surfaces: `pages_*`, `databases_*`, `database_rows_*`. Each tool has narrow blast radius, clear hint annotations, focused description.
-
-## LLM steering via tool descriptions
-
-Tool descriptions are model prompt context — not docs. The LLM reads them every call and uses them to PICK the right tool. Without explicit "when-to-use" cues, it defaults to the most-obvious tool (usually wrong).
-
-Rules:
-- Each description includes ONE WHEN-TO-USE sentence + ONE WHEN-NOT-TO-USE sentence when an ambiguous sibling exists.
-- Steer OFF wrong defaults explicitly: `pages_append_markdown` description says *"markdown tables become STATIC blocks — for real DB use databases_create_inline. For side-by-side layout use pages_append_columns."*
-- Hint default behaviour: *"DEFAULT to columns for any list-of-N comparable items instead of stacking vertically."*
-- For composite tools, name the failure mode being prevented: *"ONE-SHOT — skips the create→get→append chain that strands the page empty when append fails."*
-- Annotate enums in description: select-option lists, status defaults, slug format.
-
-## Pagination + response-shape symmetry
-
-Bug pattern: tool returns `nextCursor` but the inputSchema doesn't accept `cursor`. Decorative nonsense — client can never paginate.
-
-Rule: tool inputSchema, dispatcher arg pass-through, and handler validator must agree on **arg name, type, AND nullability**. Same for response — dispatcher destructure must match handler return EXACTLY (`{items, nextCursor, total}` vs hallucinated `{results, cursor}`). TypeScript won't catch this since the field access is `.results` on `any`. First real client call exposes it as "validation/internal error inconsistent" from the LLM's perspective.
-
-Contract:
-```
-inputSchema:  { cursor?: number; limit?: number }
-dispatcher:   passes through, clamps limit to 1..100, defaults cursor to 0
-handler:      args: { userId, cursor?: number, pageSize?: number }   ← name match!
-returns:      { items, nextCursor: number|null, total }
-dispatcher:   destructures { items, nextCursor, total } and maps verbatim
-```
-
-## Anti-abuse layering
-
-Multi-user MCP is a cost-attack surface (entity spam + AI token burn). Layer:
-- **Per-minute burst** — `rateLimits` table per `(userId, scope)`. e.g. `pages.create: 60/min`.
-- **Per-day cap** — second `rateLimits` bucket with `windowMs: 86_400_000`. e.g. `pages.create.day: 800/day`. Stops slow-brute pacing under the burst cap.
-- **AI token quota** — separate `aiTokenUsage` table keyed by `(userId, dayKey)`. Check BEFORE invoking upstream LLM, record after each hop. Default e.g. 200k tokens/day, env-tunable (`AI_DAILY_TOKEN_CAP`). On a BYOK gateway (the user's own upstream key, never your bill) the right currency is a per-tenant **spend** budget instead — but only if it is defaulted ON; an opt-in cap is not a quota.
-
-Sizing: daily ≈ 10× heaviest legitimate user. Per-minute unchanged.
-
-## Pitfalls (the 16 we hit)
-
-1. **AuthProvider scope** — `/oauth/*` outside admin tree → add `app/oauth/layout.tsx` mounting your auth providers. Do NOT hoist provider into root layout (drags websocket onto marketing pages).
-2. **Browser extensions** — Perplexity/Grammarly inject inline content blocked by CSP. Verify in incognito before debugging.
-3. **Env in two places** — `MCP_API_KEY` must exist in Next runtime AND in backend isolate (Convex env). Missing one → 401 from MCP OR "session invalid" from mutations.
-4. **PKCE method** — refuse `plain`, S256 only.
-5. **Verifier length** — 43..128, reject outside.
-6. **base64url ≠ base64** — `+→-`, `/→_`, strip `=`. Standard base64 silently produces wrong challenges.
-7. **Consume code before mint** — delete the code row first, insert token second. A `consumed:true` patch works but grows the table forever.
-8. **Tool errors → `result.isError`** — NOT JSON-RPC `error` object.
-9. **AsyncLocalStorage > prop drilling (Next)** — skip ALS and every handler threads bearer manually. For Convex, equivalent is "resolve `userId` from bearer in route handler, pass to internal mutations as arg".
-10. **Discovery cache headers** — `cache-control: public, max-age=3600` on `.well-known/*`.
-11. **MCP URL must be SITE origin on Convex self-hosted** — `api-*` is queries-only; httpActions live at `site-*`. Wrong URL → 404 on first call → ChatGPT says "MCP server does not implement OAuth".
-12. **`.well-known/*` MUST mirror at MCP origin** — Frontend copy alone is insufficient. ChatGPT probes resource host first. Symptom matches #11.
-13. **Convex internal mutations cannot dynamic-import** — Static top-level only. Symptom: "dynamic module import unsupported" at first tool call.
-14. **Read-tool args validator drift** — Dispatcher missing `userId` arg to ownership-scoped queries throws Convex `ArgumentValidationError` → "validation/internal error". Pass every required arg explicitly.
-15. **Response shape symmetry** — Handler returns `{items, nextCursor, total}` but dispatcher destructures `{results, cursor}` → `.map of undefined`. TypeScript doesn't catch because `any`. Test with a real call before declaring done.
-16. **Missing `workspaceId` on inserts = invisible rows** — Sidebar/library filter via `by_workspace`; rows with `undefined` workspaceId vanish from UI even though they exist. Auto-stamp via `getActiveWorkspaceMutation`.
-
-## "Always allow" — what's possible
-
-MCP spec has NO server-side flag for `alwaysAllow` / `skipUserConfirmation`. Approval is host UX (ChatGPT/Claude/Cursor each have their own).
-
-What CAN steer client policy:
-- `readOnlyHint: true` → reads usually skip approval entirely
-- `idempotentHint: true` + `destructiveHint: false` → many clients auto-approve after first "always allow" click
-- `destructiveHint: true` → always prompts (correct — matches blast radius)
-- Snake_case + narrow tool names → fewer mega-tools = less reason to wrap in "review every call"
-
-User clicks "always allow this tool" in client UI once per tool. That's the actual mechanism — no bypass.
-
-## Security checklist (verify before opening to ChatGPT)
-
-- [ ] `MCP_API_KEY` ≥ 32 hex chars
-- [ ] Bearer compare constant-time-ish (same-length first)
-- [ ] PKCE verifier 43..128, S256 only
-- [ ] `redirect_uri` HTTPS-validated at consent page + host allowlist for known clients (chatgpt.com / chat.openai.com / platform.openai.com) — pre-registered clients only; under open DCR use a consent page that renders the destination host and marks the client name as self-reported
-- [ ] Auth codes single-use, ≤5 min TTL
-- [ ] Access tokens have `expiresAt` + `revokedAt`
-- [ ] Tokens + auth codes stored as sha256; raw value returned exactly once, at mint
-- [ ] OAuth tokens re-validated as active on every check
-- [ ] 401 response includes `www-authenticate: Bearer realm="..."` + `resource_metadata` hint
-- [ ] No raw secrets in tool handler output
-- [ ] Service-account env bypass opt-in (skip when env unset)
-- [ ] Per-minute + per-day rate limits on every write tool
-- [ ] AI token quota per user per day if any tool fans out to an LLM (BYOK: a per-tenant spend budget, defaulted ON)
+- [ ] `MCP_API_KEY` ≥ 32 hex chars, and its compare is constant-time-ish (same-length first)
+- [ ] PKCE S256 only, `plain` refused; verifier length 43..128 enforced
+- [ ] `redirect_uri` pre-registered per client + HTTPS-validated at the consent page. Host allowlist for known clients; under open DCR the consent page must render the destination HOST and mark the client name self-reported
+- [ ] Auth codes single-use, ≤5 min TTL, row DELETED on exchange
+- [ ] Access tokens carry `expiresAt` + a revoke path, re-validated on every call
+- [ ] Tokens **and** auth codes stored as sha256; raw value returned exactly once, at mint
+- [ ] 401 carries `WWW-Authenticate: Bearer resource_metadata="…"`
+- [ ] Discovery documents pin their origin to a CONSTANT, never the request `Host` header
+- [ ] No raw secrets in tool output
+- [ ] Service-account env bypass is opt-in (skipped when the env var is unset)
+- [ ] Per-minute **and** per-day rate limits on every write tool
+- [ ] Multi-tenant: membership re-checked on EVERY call, not just at mint
 
 ## Adaptation notes
 
-- **Different DB** — Drizzle/Prisma/Supabase. PKCE/token logic DB-agnostic; need `byHash` + `byCodeHash` lookups + an atomic delete-on-exchange.
-- **Different framework** — Hono/Express/SvelteKit. MCP endpoint is just `POST(json) → json`. Same dispatcher works.
-- **Bun** — ALS API identical. **Cloudflare Workers** — needs nodejs compat shim for ALS.
-- **Multi-tenant** — scope `userId` to tenant, add `tenantId` to ALS context (or arg on Convex), filter tool queries by tenant from token. Re-check membership on EVERY call, not just at mint — that is what kills a live bearer the instant a member is removed. And OAuth-minted tokens have no tenant picker: decide up front between defaulting to the personal tenant and putting a selector on the consent page.
-- **Per-user (not admin-only)** — switch `createCode` from `requireAdmin` to `requireAuth`. Every authed user mints OAuth codes for their own scope. `revokeToken` becomes owner-check (`row.userId === me`) instead of admin. Tokens query becomes `listMine` (filter by_user index) instead of `adminList`.
-- **No admin auth** — build email+password (bcrypt/argon2/PBKDF2) first; consent page needs someone to authorize on behalf of.
-- **Editor-style apps** — add block-aware tools the LLM can't fake via markdown: inline DB embed, column layouts, mention insertion, snapshot, slash-command shortcuts. Each as its own narrow tool with WHEN-TO-USE description.
-
-## Tool catalog template (start here)
-
-Read-only (`readOnlyHint:true`):
-- `<resource>_list({cursor?, limit?}) → {items, nextCursor, total}`
-- `<resource>_get({id}) → {…full doc}`
-- `<resource>_search({query, limit?}) → {results[]}`
-
-Mutating, idempotent (`idempotentHint:true`):
-- `<resource>_set_<field>({id, value})` — narrow per-field setters beat one `_update` mega-tool
-
-Mutating, non-idempotent:
-- `<resource>_create({…required, …optional}) → {id}`
-- `<resource>_create_inline({parentId, …}) → {id, blockId}` (composite one-shot)
-- `<resource>_append_<thing>({id, …}) → {id, …Count}`
-
-Destructive (`destructiveHint:true`):
-- `<resource>_trash({id})` — soft-delete, recoverable
-- Reserve hard-delete for admin surface; never expose to MCP unless explicit.
-
-For databases:
-- Always add `<entity>_set_schema` (add property) NOT `_update_property` (broad).
-- Always map property NAME↔id in dispatcher; never expose internal `id` to LLM.
+- **Any framework** — the endpoint is `POST(json) → json`. Hono, Express, SvelteKit, Workers: same dispatcher.
+- **Any database** — PKCE/token logic is DB-agnostic; you need a by-hash lookup for tokens and codes plus an atomic delete-on-exchange.
+- **Multi-tenant** — scope every tool query by the tenant on the token, and re-check membership per call: that is what kills a live bearer the moment a member is removed. OAuth-minted tokens have no tenant picker — decide up front between defaulting to a personal tenant and putting a selector on the consent page.
+- **Per-user rather than admin-only** — consent switches from `requireAdmin` to `requireAuth`; revoke becomes an owner check; the tokens list filters by a `by_user` index.
+- **No auth yet?** Build sign-in first. A consent page needs somebody to authorize on behalf of.
 
 ## Reference links
 
-- MCP spec 2025-11-25: https://modelcontextprotocol.io/specification/2025-11-25
-- MCP authorization: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
-- OpenAI Apps SDK: https://developers.openai.com/apps-sdk
-- Apps SDK auth: https://developers.openai.com/apps-sdk/build/auth
-- RFC 7636 PKCE: https://datatracker.ietf.org/doc/html/rfc7636
-- RFC 8414 AS Metadata: https://datatracker.ietf.org/doc/html/rfc8414
-- RFC 9728 Protected Resource Metadata: https://datatracker.ietf.org/doc/html/rfc9728
-- `mcp-remote` (HTTP → stdio bridge for Claude Desktop / etc.): https://www.npmjs.com/package/mcp-remote
+- MCP spec: https://modelcontextprotocol.io/specification/2025-11-25 · [authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+- OpenAI Apps SDK: https://developers.openai.com/apps-sdk · [auth](https://developers.openai.com/apps-sdk/build/auth) · [MCP & connectors](https://developers.openai.com/api/docs/guides/tools-connectors-mcp)
+- RFC 7636 PKCE · RFC 8414 AS metadata · RFC 9728 protected-resource metadata · RFC 7591 dynamic client registration
+- `mcp-remote` (HTTP → stdio bridge): https://www.npmjs.com/package/mcp-remote
+- Prior art worth reading: [Notion's hosted MCP server](https://www.notion.com/blog/notions-hosted-mcp-server-an-inside-look) · [Stripe MCP](https://docs.stripe.com/mcp)

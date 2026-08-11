@@ -1,10 +1,28 @@
 # mcp-skill
 
-A [Claude Code](https://claude.com/claude-code) skill that walks you through building a **production-ready MCP server** (bearer + OAuth 2.1 + PKCE + admin UI) so MCP-aware clients — ChatGPT custom apps, Claude.ai web, Cursor, Cline, the `mcp-remote` stdio bridge — can call your app's tools via natural language.
+A [Claude Code](https://claude.com/claude-code) skill for building **one** production MCP server that every AI host can use — ChatGPT apps/connectors, Claude.ai, Claude Code, Cursor, Cline, the `mcp-remote` bridge — with OAuth 2.1 + PKCE, hashed bearers and an admin UI.
 
-Battle-tested across two real deployments. Covers the 16 pitfalls you'd otherwise hit yourself.
+The premise: you never build a server per vendor. Notion, Stripe, Linear and GitHub each expose a single hosted endpoint and let every host connect to it. The differences between AI hosts live in how a client *registers*, never in your server.
 
-> **What's a skill?** A Markdown file Claude Code loads on demand. When you type `/chatgpt-mcp` or say "add MCP server to this project", Claude reads `SKILL.md` and uses its content as a step-by-step recipe. No code execution; pure prompt context.
+Battle-tested across real deployments. Covers the 16 pitfalls you'd otherwise hit yourself.
+
+> **What's a skill?** Markdown that Claude Code loads on demand. Type `/chatgpt-mcp` or say "add an MCP server to this project" and Claude reads `SKILL.md` as a step-by-step recipe. No code execution; pure prompt context.
+>
+> **Why is it still called `chatgpt-mcp`?** History — it started as a ChatGPT connector recipe. The name is the trigger people already type, so renaming it would break every install for no benefit. The content is host-agnostic.
+
+## Structure
+
+`SKILL.md` stays short (~110 lines) and is the only file always loaded. Everything else is pulled in **only when it applies**, so a build for a Next.js app never pays for the Convex chapter:
+
+| File | Read when |
+|---|---|
+| `SKILL.md` | always — decision tree, the universal core, security checklist |
+| `references/clients.md` | wiring a specific host (ChatGPT / Claude.ai / Cursor / IDEs) |
+| `references/tool-design.md` | designing the tool surface — **highest leverage, most skipped** |
+| `references/oauth.md` | implementing the OAuth half |
+| `references/transport.md` | JSON-RPC shape, SSE, status codes, discovery docs |
+| `references/convex.md` | your backend is Convex |
+| `references/pitfalls.md` | something is broken |
 
 ## What you'll build
 
@@ -18,15 +36,15 @@ Each phase ships independently. Bearer alone unlocks scripts and stays as a dev 
 
 ## Who it's for
 
-- You have a **Next.js** or **Convex** (self-hosted) app with auth (admin or multi-user).
-- You want users to interact with your app through ChatGPT/Claude/Cursor via tool calls — list/get/create/update/trash entities.
+- You have an app with auth (admin or multi-user) and want an AI to act in it — list/get/create/update/trash.
+- You want it reachable from whichever AI you or your users prefer, without maintaining N integrations.
 - You'd rather copy a recipe with the 16 pitfalls already mapped than rediscover them.
 
-If your backend is something else (Hono, Express, SvelteKit, Cloudflare Workers), the skill's adaptation notes get you 80% of the way.
+Worked examples are Next.js and Convex, but the endpoint is just `POST(json) → json` — Hono, Express, SvelteKit and Workers are adaptation notes, not rewrites.
 
 ## Quick install
 
-The skill lives in a single file: `SKILL.md`. Drop it into your Claude Code skills directory and reload.
+Copy the whole folder (`SKILL.md` + `references/`) into your Claude Code skills directory and reload.
 
 ### Option A — clone (recommended, easy updates)
 
@@ -40,12 +58,14 @@ To update later:
 cd ~/.claude/skills/chatgpt-mcp && git pull
 ```
 
-### Option B — copy file only
+### Option B — copy the files (no git)
 
 ```bash
-mkdir -p ~/.claude/skills/chatgpt-mcp
-curl -fsSL https://raw.githubusercontent.com/rahmanef63/mcp-skill/main/SKILL.md \
-  -o ~/.claude/skills/chatgpt-mcp/SKILL.md
+DEST=~/.claude/skills/chatgpt-mcp
+mkdir -p $DEST/references
+for f in SKILL.md references/clients.md references/tool-design.md references/oauth.md references/transport.md references/convex.md references/pitfalls.md; do
+  curl -fsSL "https://raw.githubusercontent.com/rahmanef63/mcp-skill/main/$f" -o "$DEST/$f"
+done
 ```
 
 ### Option C — per-project (not global)
@@ -53,21 +73,24 @@ curl -fsSL https://raw.githubusercontent.com/rahmanef63/mcp-skill/main/SKILL.md 
 Drop in your project's `.claude/skills/chatgpt-mcp/` instead of `~/.claude/`. The skill is then available only inside that repo — and, if you commit it, to everyone who clones it.
 
 ```bash
-mkdir -p .claude/skills/chatgpt-mcp
-curl -fsSL https://raw.githubusercontent.com/rahmanef63/mcp-skill/main/SKILL.md \
-  -o .claude/skills/chatgpt-mcp/SKILL.md
+DEST=.claude/skills/chatgpt-mcp
+mkdir -p $DEST/references
+for f in SKILL.md references/clients.md references/tool-design.md references/oauth.md references/transport.md references/convex.md references/pitfalls.md; do
+  curl -fsSL "https://raw.githubusercontent.com/rahmanef63/mcp-skill/main/$f" -o "$DEST/$f"
+done
 ```
 
 Skills are discovered by directory presence — there is nothing to register in `.claude/settings.json`, no plugin list, no config key.
 
 ## It's additive — that's the whole design
 
-The skill is one Markdown file Claude reads. It has no runtime, imports nothing, and is imported by nothing.
+The skill is Markdown Claude reads. It has no runtime, imports nothing, and is imported by nothing.
 
 **Its entire footprint in your repo:**
 
 ```
 .claude/skills/chatgpt-mcp/SKILL.md
+.claude/skills/chatgpt-mcp/references/*.md
 ```
 
 | Never touched | Why it matters |
@@ -91,8 +114,10 @@ That is the complete removal. `git status` goes back to clean and the repo is by
 **Check whether your copy has drifted from upstream:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rahmanef63/mcp-skill/main/SKILL.md \
-  | diff - .claude/skills/chatgpt-mcp/SKILL.md && echo "up to date"
+for f in SKILL.md references/clients.md references/tool-design.md references/oauth.md references/transport.md references/convex.md references/pitfalls.md; do
+  curl -fsSL "https://raw.githubusercontent.com/rahmanef63/mcp-skill/main/$f" \
+    | diff -q - ".claude/skills/chatgpt-mcp/$f" >/dev/null || echo "drifted: $f"
+done; echo "check complete"
 ```
 
 ## Verify the install
@@ -126,17 +151,17 @@ The skill auto-activates on any of these (you don't need to type `/chatgpt-mcp`)
 
 ## What's in the recipe
 
-`SKILL.md` is ~300 lines covering:
+~110 lines always loaded, ~410 more pulled in on demand, covering:
 
 - **3-phase build** — bearer → OAuth → admin UI, ship each phase independently
 - **Convex-specific gotchas** — 8 pitfalls unique to self-hosted Convex (CLOUD vs SITE origin split, static-import requirement, etc.)
-- **LLM steering via tool descriptions** — descriptions ARE prompt context; how to write them so the model picks the right tool
+- **Tool design** — agent-oriented tools over 1:1 REST mapping, Markdown over JSON for token density, descriptions as prompt context
 - **Pagination + response-shape symmetry** — the bug class TypeScript can't catch
 - **Anti-abuse layering** — per-minute burst + per-day cap + AI token quota per user
 - **Always-allow reality check** — MCP spec has no server flag for it; what actually works
-- **Security checklist** — 13 items to verify before opening to ChatGPT
+- **Security checklist** — the gate to clear before you expose it to anyone
 - **Tool catalog template** — copy-paste tool signatures by op-type
-- **ChatGPT connector form mapping** — exact field-by-field values to paste
+- **Client matrix** — what ChatGPT / Claude.ai / Cursor / IDE agents each require, and the exact ChatGPT form values
 - **16 pitfalls** with symptoms + root cause + fix
 
 ## Compatibility
