@@ -1,0 +1,65 @@
+# AGENTS.md
+
+**Scope:** the entry point for an agent reading this repo cold — full file map, reading order per goal, and the invariants your output must not break.
+**Assumes:** you were pointed here to write or debug an AI integration in *another* codebase. Every file here is read-only input; nothing in this repo is installed, imported or executed.
+
+## Goal
+
+Produce one remote MCP server in the target codebase, plus whatever registration the user's chosen host needs. One server, several ways to register and ship it. Vendor folders describe registration and distribution only — they never change server logic.
+
+## Load only what applies
+
+There are 21 Markdown files here. Reading all of them costs tokens you want for the build. Open the folder that matches the goal, then pull single `shared/` files on demand. The per-goal orders below are the intended budget.
+
+## File map
+
+| Path | Purpose |
+|---|---|
+| `README.md` | human router: thesis, folder decision table, dependency line, license |
+| `AGENTS.md` | this file — agent router |
+| `LICENSE` | MIT, 2026 rahmanef63 |
+| `cn-mcp-core/README.md` | the design invariant, the phase decision tree, framework/DB adaptation notes, spec links |
+| `cn-mcp-core/phase-1-bearer.md` | the endpoint: JSON-RPC dispatch, bearer auth, tool registry |
+| `cn-mcp-core/phase-2-oauth.md` | the authorization half: consent page, auth codes, token exchange, discovery documents |
+| `cn-mcp-core/phase-3-admin-ui.md` | where a human mints, inspects and revokes their own tokens |
+| `shared/tool-design.md` | naming, granularity, response shape — decides whether the server is any good |
+| `shared/clients.md` | per-host matrix: transport accepted, registration path, whether a bridge is needed |
+| `shared/oauth.md` | OAuth 2.1 + PKCE S256 in implementable detail |
+| `shared/transport.md` | `POST /mcp` JSON-RPC shape, SSE, status codes, discovery documents |
+| `shared/convex.md` | Convex-only gotchas, starting with the SITE vs CLOUD origin split |
+| `shared/pitfalls.md` | 16 real failures, symptom → root cause → fix |
+| `shared/security-checklist.md` | pass/fail gate before the endpoint is reachable by anyone |
+| `cn-claude-plugin/README.md` | connector vs plugin, the surface picker, the claude.ai connector path |
+| `cn-claude-plugin/manifest.md` | `plugin.json` fields, component directories, `${CLAUDE_PLUGIN_ROOT}`, local testing |
+| `cn-claude-plugin/marketplace.md` | `marketplace.json`, `/plugin install`, what catalog submission actually is |
+| `cn-gpt-plugin/README.md` | the auth-mode gate (no API-key field in ChatGPT) and the Apps SDK → Plugins rename |
+| `cn-gpt-plugin/register.md` | Path A — developer mode, your own or your workspace's ChatGPT, no review |
+| `cn-gpt-plugin/publish.md` | Path B — public Plugins Directory submission, verification and tool scan |
+| `cn-gpts/README.md` | Actions vs MCP decision, plus the eight GPT Builder Configure fields |
+| `cn-gpts/openapi-actions.md` | the OpenAPI 3.1 document, auth panel, privacy-policy gate, when to abandon this for MCP |
+
+## Reading order by goal
+
+| Goal | Order |
+|---|---|
+| **Build the server** | `cn-mcp-core/README.md` → `phase-1-bearer.md` → `shared/tool-design.md` → `shared/transport.md` → `shared/convex.md` *(Convex only)* → `phase-2-oauth.md` + `shared/oauth.md` *(any consumer host)* → `phase-3-admin-ui.md` *(per-user tokens)* → `shared/security-checklist.md` |
+| **Ship to Claude** | `cn-claude-plugin/README.md` → stop if the answer is "paste the URL" → `manifest.md` *(team `.mcp.json` or a shareable bundle)* → `marketplace.md` *(others install it)* |
+| **Ship to ChatGPT** | `cn-gpt-plugin/README.md` → `register.md` → `publish.md` *(public directory only)*; if OAuth is missing, detour to `shared/oauth.md` + `cn-mcp-core/phase-2-oauth.md` first |
+| **Build a Custom GPT** | `cn-gpts/README.md` → `cn-gpts/openapi-actions.md`. Skips `cn-mcp-core/` entirely — Actions are not MCP |
+| **Debug something broken** | `shared/pitfalls.md` first → `shared/transport.md` *(shape/status errors)* → `shared/convex.md` *(Convex)* → `shared/oauth.md` *(consent, codes, discovery)* |
+
+## Invariants
+
+- **One server, host-agnostic.** It lives in `cn-mcp-core/` and nowhere else. If a sentence you are about to write branches server behaviour by which AI is calling, delete it.
+- **`cn-claude-plugin/` and `cn-gpt-plugin/` assume `cn-mcp-core/` is built and deployed. `cn-gpts/` does not.**
+- **This repo is not installable.** Never create `.claude-plugin/`, never create `skills/`, never add YAML frontmatter. Those artifacts belong in the *user's* project when `cn-claude-plugin/manifest.md` calls for them.
+- **Every file opens with an H1, then exactly `**Scope:**` and `**Assumes:**`, in that order, before anything else.** Tables over paragraphs. No filler, no marketing.
+- **Honesty beats fluency.** If a claim is not confirmed by a doc you actually fetched or a file you actually read, write `TODO: verify` inline. A confident wrong registration requirement costs the reader hours.
+- **The worked example is at Phase 1, bearer only.** `github.com/rahmanef63/codex-build-week`, cloned at `/home/rahman/projects/codex`. Its `convex/mcp/routes.ts` header comment defers OAuth 2.1 + PKCE to a later phase. Cite it with real paths and real snippets; never describe it as having OAuth today.
+
+## Before you return
+
+1. Every path you cite resolves — in this repo and in the target codebase.
+2. Every host-specific claim is either sourced or marked `TODO: verify`.
+3. No server logic branches on the calling host.
+4. Report which files you actually read, so the next agent can skip them.

@@ -1,5 +1,8 @@
 # Convex-specific — read before writing code
 
+**Scope:** the Convex-only traps that break an MCP server, starting with the SITE vs CLOUD origin split.
+**Assumes:** your backend is Convex (self-hosted or Cloud) and you are about to write the `/mcp` route.
+
 These bit hard in real deployments and are not in the generic recipe.
 
 ## 1. SITE vs CLOUD origin (self-hosted)

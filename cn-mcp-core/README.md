@@ -3,11 +3,14 @@
 **Scope:** building the one remote MCP endpoint every AI host connects to — transport, auth, tools, OAuth, admin UI.
 **Assumes:** a deployed web app on HTTPS with some notion of a signed-in user. Nothing else; no host chosen yet.
 
+**Worked example:** `github.com/rahmanef63/codex-build-week` (Next.js + Convex) implements this at **Phase 1 only** — bearer, no OAuth; each phase file cites its real files.
+
 You build **one** remote MCP endpoint. ChatGPT, Claude.ai, Cursor and the rest all speak the same protocol to it. Nobody ships a per-vendor server — Notion, Stripe, Linear and GitHub each expose a single hosted endpoint and let every host connect. Vendor differences live in **how a client registers**, never in your server.
 
 That is the whole design. If you find yourself branching on which AI is calling, stop — you have taken a wrong turn.
 
-**Non-negotiables** (every host assumes them): remote HTTPS, OAuth 2.1 + PKCE S256, tokens hashed at rest, tool errors inside `result`.
+**Non-negotiable everywhere:** tokens hashed at rest, tool errors inside `result`.
+**Non-negotiable for a public consumer host** (ChatGPT, Claude.ai): remote HTTPS, OAuth 2.1 + PKCE S256 — their forms expose no credential field. Claude Code, Cursor and `mcp-remote` take an arbitrary header from config, so bearer-only is a complete build there. See the decision tree below.
 
 ## Read this much, then stop
 
@@ -32,7 +35,8 @@ Load only what applies. Reading all of it costs tokens you want for the build.
 | Need | Build |
 |---|---|
 | Curl/script automation, internal only | **Phase 1 only** (bearer). ~30 min, one env var. |
-| Any consumer AI host (ChatGPT, Claude.ai, Cursor) | **Phase 1 + 2**. Their forms have no API-key field — OAuth is mandatory. |
+| Cursor, Claude Code, `mcp-remote` | **Phase 1 only** — they take an arbitrary header from config. |
+| ChatGPT or Claude.ai connector form | **Phase 1 + 2**. Those forms have no API-key field — OAuth is mandatory. |
 | Production, revocable per-user access | **Phase 1 + 2 + 3** (admin / user-settings UI). |
 
 Always build bearer first — it stays as your dev escape hatch after OAuth lands.
@@ -48,7 +52,7 @@ Always build bearer first — it stays as your dev escape hatch after OAuth land
 ## Reference links
 
 - MCP spec: https://modelcontextprotocol.io/specification/2025-11-25 · [authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
-- OpenAI Apps SDK: https://developers.openai.com/apps-sdk · [auth](https://developers.openai.com/apps-sdk/build/auth) · [MCP & connectors](https://developers.openai.com/api/docs/guides/tools-connectors-mcp)
+- OpenAI Plugins, formerly Apps SDK — both `/apps-sdk` URLs now 301 here: https://developers.openai.com/plugins · [auth](https://developers.openai.com/plugins/build/auth) · [MCP & connectors](https://developers.openai.com/api/docs/guides/tools-connectors-mcp)
 - RFC 7636 PKCE · RFC 8414 AS metadata · RFC 9728 protected-resource metadata · RFC 7591 dynamic client registration
 - `mcp-remote` (HTTP → stdio bridge): https://www.npmjs.com/package/mcp-remote
 - Prior art worth reading: [Notion's hosted MCP server](https://www.notion.com/blog/notions-hosted-mcp-server-an-inside-look) · [Stripe MCP](https://docs.stripe.com/mcp)

@@ -1,5 +1,8 @@
 # Transport
 
+**Scope:** the wire contract — `POST /mcp` JSON-RPC shape, streamable HTTP vs SSE, notifications, protocol version, error codes, status codes, discovery documents.
+**Assumes:** you are writing or debugging the endpoint itself. Auth is covered separately in [`oauth.md`](./oauth.md).
+
 ## One endpoint, JSON-RPC over POST
 
 `POST /mcp`, `content-type: application/json`, a JSON-RPC object in and one out. That covers every remote host.

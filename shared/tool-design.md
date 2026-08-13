@@ -1,5 +1,8 @@
 # Tool design — the part that decides whether this is any good
 
+**Scope:** naming, granularity, response shape, descriptions, pagination symmetry and annotations — the surface that decides whether the server is any good.
+**Assumes:** you know which operations you want to expose. Nothing about MCP transport is needed to read this.
+
 Auth is where you get hacked; **tool design is where you get ignored**. A correct server with a bad tool surface produces an assistant that picks the wrong tool, burns tokens, and gives up.
 
 ## 1. Do not mirror your REST API

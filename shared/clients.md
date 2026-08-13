@@ -1,5 +1,8 @@
 # Client matrix — what each AI host needs from the same server
 
+**Scope:** what each AI host needs from the one server — transport accepted, registration path, whether a bridge is needed, plus the ChatGPT connector-form mapping.
+**Assumes:** the server from [`../cn-mcp-core/`](../cn-mcp-core/README.md) exists; you are choosing which hosts to support, not writing server code.
+
 Your server does not change per host. What changes is **registration** and, for desktop apps, whether a bridge is needed.
 
 | Host | Transport it accepts | Client registration | Notes |

@@ -1,6 +1,9 @@
 # OAuth 2.1 + PKCE for MCP
 
-Every consumer AI host requires this — none of them offer an API-key field. Budget ~3 hours the first time.
+**Scope:** the implementable OAuth 2.1 + PKCE S256 recipe — flow, the two digest-only tables, exchange ordering, routes, consent page, rate limits.
+**Assumes:** Phase 1 is live and you are targeting a host whose form exposes no credential field (ChatGPT, Claude.ai). Budget ~3 hours the first time.
+
+Those hosts require this; Cursor, Claude Code and `mcp-remote` do not — they take an arbitrary header from config.
 
 ## Flow
 
@@ -50,8 +53,8 @@ If you advertise exactly one scope, **store the literal** — never echo back a 
 
 - `/oauth/authorize` — the consent page. Reads the signed-in user from your auth context; bounces to login when anonymous. On approve, calls the mint mutation and redirects to `redirect_uri?code=…&state=…`.
 - `/oauth/token` — accept **both** `application/x-www-form-urlencoded` and `application/json`. Validate `grant_type=authorization_code`. Return proper OAuth error codes. `Cache-Control: no-store`.
-- `/oauth/register` — RFC 7591 DCR, if you want Claude.ai / Cursor. See `clients.md`.
-- `/.well-known/oauth-authorization-server` + `/.well-known/oauth-protected-resource` — see `transport.md`.
+- `/oauth/register` — RFC 7591 DCR, if you want Claude.ai / Cursor. See [`clients.md`](./clients.md).
+- `/.well-known/oauth-authorization-server` + `/.well-known/oauth-protected-resource` — see [`transport.md`](./transport.md).
 
 If your framework nests providers (Next.js app router), the consent route needs the **same auth providers** as the rest of the app or you get `useAuth must be used within AuthProvider`. Add a layout for the `/oauth` segment rather than hoisting the provider into the root layout — hoisting drags an auth websocket onto every marketing page.
 

@@ -1,5 +1,8 @@
 # Pitfalls — 16 that cost real hours
 
+**Scope:** real failures — symptom, root cause, fix.
+**Assumes:** something is already broken. You have a deployed endpoint and an error message, not a blank page.
+
 Ordered roughly by how likely you are to hit them.
 
 1. **Auth-provider scope** — `/oauth/*` sits outside your app tree, so the consent page throws `useAuth must be used within AuthProvider`. Add a layout for that segment; do NOT hoist the provider into the root layout (it drags an auth websocket onto marketing pages).
