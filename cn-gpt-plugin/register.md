@@ -30,7 +30,9 @@ For OAuth: "if static credentials are provided, then they will be used. Otherwis
 
 **Both halves or no linking UI:** the OAuth prompt appears only when you ship per-tool `securitySchemes` **and** return a runtime error carrying `_meta["mcp/www_authenticate"]` with both `error` and `error_description`. "Without both halves ChatGPT will not show the linking UI for that tool." Details in [`../shared/oauth.md`](../shared/oauth.md).
 
-*TODO: verify* — the exact field labels in the connect modal. The docs name only **Connection** and **Tunnel**; the auth selector's labels and what "static credentials" means concretely (presumably a client ID / client secret pair) are never shown.
+The modal, step by step ([connect-chatgpt](https://developers.openai.com/plugins/deploy/connect-chatgpt.md)): plus button → user-facing **name and description** → under **Connection**, either paste the MCP server URL *including the `/mcp` path*, or select **Tunnel** and choose an available tunnel / enter its `tunnel_id` → **Create the connection** → review the tools and metadata discovered from the server. There is no auth selector in the modal: auth is **discovered**, not declared.
+
+"Static credentials" means an OAuth client ID and secret you supply. [developer-mode](https://developers.openai.com/api/docs/guides/developer-mode.md): *"For OAuth, if static credentials are provided, then they will be used. Otherwise, ChatGPT can use Client ID Metadata Documents when the authorization server advertises support and the app creator chooses CIMD."* CIMD covers public-client exchange (`none`) and signed client assertion (`private_key_jwt`); **DCR remains supported when configured**. So three registration routes, in ChatGPT's own order of preference: static → CIMD → DCR.
 
 ## Gate 2 — entitlement
 
@@ -40,7 +42,7 @@ For OAuth: "if static credentials are provided, then they will be used. Otherwis
 | Policy | "Developer mode availability can depend on account and workspace policy." | [connect-chatgpt.md](https://developers.openai.com/plugins/deploy/connect-chatgpt.md) |
 | Risk label | Flagged **"Elevated risk"** | [developer-mode.md](https://developers.openai.com/api/docs/guides/developer-mode.md) |
 
-*TODO: verify* — whether Free is actually excluded (the line lists eligible plans but never excludes Free), and whether the mobile/desktop apps can register at all ("on the web" is all that is said).
+Settled: *"Available to Pro, Plus, Business, Enterprise, and Education accounts **on the web**."* Free is absent from that list, and the list is the eligibility statement — so Free is out. **Web only**: registration is not available in the mobile or desktop apps. And it is not purely a plan question — *"Developer mode availability can depend on account and workspace policy"*, with Enterprise/Edu needing a workspace admin to grant it before the user can flip the switch.
 
 ## What ChatGPT demands that Claude Code and Cursor do not
 
@@ -58,7 +60,7 @@ Full per-host comparison: [`../shared/clients.md`](../shared/clients.md).
 
 "Supported MCP protocols: **SSE and streaming HTTP**." Elsewhere: "Respond at a stable URL, typically ending in `/mcp`." Search/fetch tools are **not** required in developer mode — they matter only for company-knowledge eligibility. See [`../shared/transport.md`](../shared/transport.md).
 
-*TODO: verify* — whether a POST-only JSON-RPC endpoint that never opens an SSE stream and holds no session is accepted. No fetched page states the minimum subset of streamable HTTP required. *TODO: verify* — whether `protocolVersion "2024-11-05"` is accepted; no page states a minimum revision.
+TODO: verify — whether a POST-only JSON-RPC endpoint that never opens an SSE stream and holds no session is accepted, and whether `protocolVersion "2024-11-05"` still is. Searched every plugins and api/docs page: the strongest statements are *"Supported MCP protocols: SSE and streaming HTTP"* and *"Support the MCP streamable HTTP transport"* ([build/mcp-server](https://developers.openai.com/plugins/build/mcp-server.md)). Neither names a minimum protocol revision or a required subset. Empirical check beats guessing here: point [MCP Inspector](https://developers.openai.com/plugins/build/mcp-server.md) at your endpoint with **Streamable HTTP** selected before you register.
 
 ## Using it, and iterating
 
@@ -70,13 +72,21 @@ Full per-host comparison: [`../shared/clients.md`](../shared/clients.md).
 
 ## Private servers: Secure MCP Tunnel
 
-Run `tunnel-client` inside your network; it long-polls OpenAI outbound-only over HTTPS to `api.openai.com:443`, forwards JSON-RPC locally, posts responses back. No inbound firewall holes. Hard limit: **"It does not support public plugin submission or distribution."** ([secure-mcp-tunnels.md](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels.md)) *TODO: verify* — whether the connect modal needs anything beyond selecting **Tunnel** and supplying a `tunnel_id` (prior tunnel creation, control-plane mTLS).
+Run `tunnel-client` inside your network; it long-polls OpenAI outbound-only over HTTPS to `api.openai.com:443`, forwards JSON-RPC locally, posts responses back. No inbound firewall holes. Hard limit: **"It does not support public plugin submission or distribution."** ([secure-mcp-tunnels.md](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels.md))
+
+**Yes, the tunnel must exist first**, and the setup is more than a `tunnel_id`:
+
+- Create it in [Platform tunnel settings](https://platform.openai.com/settings/organization/tunnels). Permissions are **organization-level, not project-level**: `Read` to view, `Read` + `Manage` to create, and **`Use`** to run `tunnel-client` or pick the tunnel in the modal. Allow **up to 30 minutes** for a new role assignment to propagate.
+- **Associate the tunnel with the target ChatGPT workspace, not only the Platform organization** — this is the documented reason a tunnel fails to appear in the modal. The same `tunnel_id` serves every association; adding one does not create a second tunnel.
+- **Control-plane mTLS is optional**, not required: outbound goes to `api.openai.com:443` *"or `mtls.api.openai.com:443` when control-plane mTLS is configured"*.
+- Keep `tunnel-client run` healthy while you create or test — discovery and tool calls both depend on it. It exposes `/healthz`, `/readyz`, `/metrics` and a loopback-only admin UI at `/ui`.
+- Tunnel lifecycle lands in Platform Audit logs as `tunnel.created` / `tunnel.updated` / `tunnel.deleted`.
 
 ## Workspace-only distribution — the middle tier
 
 `https://chatgpt.com/plugins` → **Personal** → three-dot menu on the plugin → **Publish** → specify workspace roles. Requires being a **workspace admin**. "Publishing a local plugin to your workspace doesn't publish it to the universal public Plugins Directory." Admins can disable it with `features.plugin_sharing = false` in `requirements.toml`. This is the cheapest way to serve a team without review.
 
-*TODO: verify* — whether Codex has a separate registration path for a personal MCP server. The directory is shared, but registration is documented only through ChatGPT settings.
+**Codex has no separate registration path.** You register once through ChatGPT settings and target surfaces declaratively: the submission manifest's `policy.products` takes `CHAT`, `CODEX`, or both ([submission-errors](https://developers.openai.com/plugins/deploy/submission-errors.md)). Review requires *"all test cases pass on the supported ChatGPT and Codex surfaces"*, and deleting the plugin removes it *"from ChatGPT and Codex"* — one artifact, two surfaces.
 
 ## Worked example: why TemanUsaha AI cannot be registered today
 

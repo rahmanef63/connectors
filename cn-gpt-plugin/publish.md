@@ -46,9 +46,13 @@ Calling a tool "functionally read-only" in prose while the server advertises `re
 - [ ] Release notes
 - [ ] Screenshots **only** if the scan reports a UI output template (otherwise `screenshots_not_allowed`); if supplied, one PNG/JPEG per starter prompt, **exactly 706 px wide, 400–860 px tall**
 
-*TODO: verify* — the test-case count. [submission.md](https://developers.openai.com/plugins/deploy/submission.md) says "at least five positive test cases and three negative"; [submission-errors.md](https://developers.openai.com/plugins/deploy/submission-errors.md) says final directory submission takes "**exactly** five positive test cases, three negative test cases, and release notes". Which governs, and whether more than five positives is accepted, is unresolved. Prepare exactly five and three.
+**Resolved: five and three, exactly.** [submission.md](https://developers.openai.com/plugins/deploy/submission.md) is inconsistent with itself — its prose says *"at least five positive test cases and three negative test cases"* while its own summary table and pre-flight checklist both say plainly *"five positive test cases and three negative test cases"*. [submission-errors.md](https://developers.openai.com/plugins/deploy/submission-errors.md) — the catalogue of what the portal validator actually rejects — says *"Exactly five positive test cases, three negative test cases, and release notes"*. The validator is the surface that fails you, so it governs. Prepare exactly five and three.
 
-*TODO: verify* — which auth modes the **portal** offers, as opposed to developer mode. It says only "configure authentication and provide reviewer-ready demo credentials if the server requires sign-in". *TODO: verify* — whether a **No Authentication** server exposing write tools can pass review at all; no page states a rule either way.
+The portal never enumerates auth modes the way developer mode does. What it does demand for an MCP-backed submission: *"public MCP server URL, domain verification access, authentication details, demo credentials if needed, content security policy, and accurate tool metadata"*, and **reviewer credentials that work without MFA, email confirmation or SMS confirmation** — a login wall a human reviewer cannot pass is a rejection.
+
+Instead of gating on auth mode, review gates on **annotations, which are mandatory for every MCP tool**: `readOnlyHint`, `openWorldHint`, `destructiveHint`. Set `openWorldHint: true` for a write tool that can change publicly visible internet state, and `destructiveHint: true` for anything that deletes, overwrites, revokes access, or sends something irreversible.
+
+TODO: verify — whether a **No Authentication** server exposing write tools can pass review. No page states a rule either way, and the annotation requirements suggest OpenAI polices *disclosure* of write risk rather than forbidding an auth mode. Do not read that as permission.
 
 ## Listing limits
 
@@ -81,7 +85,7 @@ Coming from Claude: skills-only plugin → **Skills only**; remote MCP connector
 
 Submit → OpenAI reviews → **you** choose when to publish ("after OpenAI approves the plugin, the developer chooses when to publish it") → it appears in the directory shared by ChatGPT and Codex. Status shows in the Dashboard plus email. Rejections come with per-check feedback; appeal by replying to the email. Withdraw an in-flight submission with **Cancel Review** — only one version may be published and one in review per MCP server integration at a time. Skill safety/security scans "can take up to 2 hours". Contact press@openai.com before any launch announcement.
 
-*TODO: verify* — any concrete review duration. OpenAI explicitly declines to give one: "Review timelines may vary… Please do not contact support to request expedited review, as these requests cannot be accommodated." Do not promise a number to anyone.
+**There is no review duration to find.** OpenAI declines to give one: *"Review timelines may vary… Please do not contact support to request expedited review, as these requests cannot be accommodated."* The only published number is the skill safety/security scan, which *"can take up to 2 hours"*. Do not promise anyone a date.
 
 **Discovery reality check:** plugins appear on the directory's main pages "only if OpenAI selects them for enhanced distribution". Otherwise they are findable by exact-name search or direct listing URL, and "developers cannot request enhanced distribution".
 
@@ -100,3 +104,32 @@ Top rejection causes, in the order they actually happen: (1) reviewers can't con
 The endpoint **path** may change in a new version; the origin never can. Pick the hostname you can live with forever before you submit — see [`../cn-mcp-core/README.md`](../cn-mcp-core/README.md) and, on Convex, the SITE-vs-CLOUD origin trap in [`../shared/convex.md`](../shared/convex.md), since the `*.convex.site` host you mount on is the origin you are locked to.
 
 "Breaking changes to the MCP server contract inside a published plugin aren't currently supported." Removing or renaming a tool, or serving incompatible content at a published UI resource URI, breaks the live version the instant you deploy — roll back rather than wait out a review. Published submissions are locked for safety; every resubmission starts a new review. Removal is by unpublishing the current version or deleting from the portal, and "plugins may be removed if they are inactive, unstable, or non-compliant".
+
+## From a Claude Code plugin
+
+OpenAI publishes a dedicated mapping: [submit-claude-plugin](https://developers.openai.com/plugins/guides/submit-claude-plugin.md). Read it before porting anything.
+
+The structural difference: *"Claude uses separate submission processes for Claude Code plugins and MCP connectors. OpenAI uses one plugin submission with either skills alone or skills and an optional remote MCP server."* And plainly: **"Claude marketplace listings and approvals don't transfer."**
+
+| What you have | OpenAI path |
+|---|---|
+| Skills-only plugin | Skills-only upload |
+| Remote MCP connector | **With MCP** (skills optional) |
+| Skills + remote MCP server | **With MCP**, skills in the same submission |
+| Only local `stdio` MCP servers | Not supported — expose a public HTTP endpoint, or wait |
+| Claude Desktop extension (`.mcpb`) | Portal rejects the file outright |
+
+Directory submissions **must** use **With MCP** and submit the MCP server directly — you cannot enter the directory by referencing an existing app integration.
+
+What has to change in the package:
+
+- `commands/` and `agents/` — convert to skills. Turn each Markdown command into a skill; merge persona instructions into the relevant skill.
+- `hooks/hooks.json` — **ChatGPT does not run plugin hooks yet**, and Codex does not run prompt or agent hook handlers. Never make a hook load-bearing for the core workflow.
+- **`userConfig` / `${user_config.*}` is not expanded.** This is the one that bites hardest coming from Claude, because `${user_config.KEY}` in `headers` is exactly how you ship a per-user secret there ([`../cn-claude-plugin/manifest.md`](../cn-claude-plugin/manifest.md)). OpenAI's answer: if the plugin needs credentials or persistent user settings, take the **With MCP** path and let the server own them.
+- Skills that name Claude — rewrite to provider-neutral language such as "the model". Keep a product name only where the instruction genuinely applies to that product.
+- `outputStyles`, `lspServers`, `channels`, `dependencies`, `experimental.*` — fold anything essential into skills, then delete the declaration.
+- Claude live artifacts are unsupported; return the content as ordinary conversation output.
+- `.claude-plugin/plugin.json` — keep it. The portal converts it to `.codex-plugin/plugin.json` and asks you to confirm normalized fields.
+- `.claude-plugin/marketplace.json`, `.mcp.json`, `mcpServers`, `.app.json` — carry no weight here. A skills-only upload excludes MCP and app configuration entirely.
+
+For a direct Claude archive upload the root, or its single top-level directory, must hold `.claude-plugin/plugin.json` with a non-empty `description` and at least one valid skill at `skills/<skill-name>/SKILL.md`.

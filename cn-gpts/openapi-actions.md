@@ -3,7 +3,7 @@
 **Scope:** the OpenAPI 3.1 document a Custom GPT consumes, the auth panel beside it, the privacy-policy gate, and when to abandon this route for MCP.
 **Assumes:** you read [`./README.md`](./README.md) and chose Actions. You have HTTPS routes that already work under `curl`.
 
-Four things carry the weight in practice: `servers[0].url`, `security` + `components.securitySchemes`, every `operationId`, and every `description`. Get those right and the rest is ordinary OpenAPI. TODO: verify — no OpenAI page I fetched enumerates what GPT Builder reads or ignores, including whether `servers` entries past the first are used at all; this is inferred from the worked example.
+Four things carry the weight: `servers[0].url`, `security` + `components.securitySchemes`, every `operationId`, and every `description`. Descriptions are load-bearing, not documentation — [getting-started](https://developers.openai.com/api/docs/actions/getting-started.md): *"ChatGPT uses the **info** at the top (including the description in particular) to determine if this action is relevant for the user query."* Get those right and the rest is ordinary OpenAPI. (Whether `servers` entries past the first are used is still undocumented; both worked files declare one.)
 
 ## Minimum viable schema
 
@@ -45,7 +45,22 @@ components:
 | `additionalProperties: false` | on every request body, so the model cannot invent fields | `temanusaha-actions.yaml:165, 175` |
 | `$ref` | internal `#/components/...` refs work; the schema is one pasted blob | throughout |
 
-TODO: verify — whether GPT Builder accepts more than one `servers` entry, and the current schema size / operation-count ceiling. Both worked files declare one server and 6 operations; I did not fetch OpenAI's limits page.
+## Hard limits
+
+From [production](https://developers.openai.com/api/docs/actions/production.md), *"subject to change"*:
+
+| Limit | Value |
+|---|---|
+| Endpoint `description`/`summary` | **300 characters** each |
+| Parameter `description` | **700 characters** each |
+| Request and response payloads | **< 100,000 characters** each |
+| Request timeout | **45 seconds** |
+| Payload content | text only — no images, no video |
+| OAuth domain | must match the primary endpoint domain, except Google, Microsoft and Adobe |
+
+No operation-count or total-schema-size ceiling is documented. Both worked files declare one server and 6 operations.
+
+**"Custom headers are not supported"** is on that same list, and it reads like it forbids the worked example's `X-Action-API-Key`. It does not. That line governs headers you declare **in the OpenAPI document** (`parameters: - in: header`). The custom header *name* you type into the API-key auth panel is a different mechanism and is the documented flow. Nothing on a fetched page says this outright — the two facts simply live on different pages — so treat the spec as the place you cannot put a header.
 
 ## `operationId` is a cross-surface contract
 
@@ -78,7 +93,7 @@ The Actions panel's Authentication selector, then the schema must match it.
 | None | not used | public read-only APIs only |
 | OAuth | not used | for per-user connection, ChatGPT's OAuth path is the MCP connector route → [`../cn-mcp-core/`](../cn-mcp-core/README.md) |
 
-TODO: verify the exact current option labels in the Authentication panel against [Getting started with GPT Actions](https://developers.openai.com/api/docs/actions/getting-started) — only the Custom-header flow is confirmed from a file I read.
+Labels confirmed — [authentication](https://developers.openai.com/api/docs/actions/authentication.md): *"To specify the authentication schema for your action, use the GPT editor and select **"None"**, **"API Key"**, or **"OAuth"**."* Three top-level choices, defaulting to None; Basic / Bearer / Custom-header is a sub-choice under API Key. OAuth asks for client ID, client secret, authorization URL, token URL and scope, and its callback is `https://chatgpt.com/aip/{g-YOUR-GPT-ID}/oauth/callback` (the older `chat.openai.com` form is still valid) — register **both** or sign-in fails.
 
 **The credential is per-GPT, not per-user.** Whoever configures the GPT types one key, and every conversation in that GPT uses it. The worked example handles multi-tenancy by making each owner build their own GPT: dashboard → Agent Setup → mint a token → paste that workspace's generated OpenAPI JSON into their own GPT Builder (`alfa.md:195-198`, `alfa.md:24`). Registration steps, verbatim order (`alfa.md:183-189`): Create new action → Authentication = API key → Custom header → header name → key value → paste schema → confirm the operationIds are detected → Privacy Policy URL.
 
@@ -88,7 +103,11 @@ TODO: verify the exact current option labels in the Authentication panel against
 
 `alfa.md:189`: a private demo may leave the Privacy Policy URL blank; before sharing the GPT via public link or the GPT Store you must supply a valid public privacy-policy URL.
 
-TODO: verify the exact current gate (which sharing modes demand it, and whether the URL is fetched/validated) against [Configuring actions in GPTs](https://help.openai.com/en/articles/9442513-configuring-actions-in-gpts). The rule above is quoted from the worked example's own doc, not from a page I fetched.
+The gate, confirmed: **private GPT → not required. Public link or GPT Store → required.** Publishing without one is blocked with `Public actions require valid privacy policy URLs`. See [Sharing and publishing GPTs](https://help.openai.com/en/articles/8798878-sharing-and-publishing-gpts) and [Troubleshooting GPTs](https://help.openai.com/en/articles/11325361-troubleshooting-gpts). Note `help.openai.com` returns **403 to automated fetches**, so those two pages must be opened in a browser to re-check.
+
+TODO: verify what "valid" means mechanically — builders report the error while a policy URL *is* configured, which suggests the URL is fetched and must return 200 public HTML, but no page states the check.
+
+Different gate from the OpenAI plugins directory, which requires a privacy-policy URL for every MCP-backed submission — HTTPS, ≤1024 chars, matching your verified publisher identity, and disclosing every data category you return. See [`../cn-gpt-plugin/publish.md`](../cn-gpt-plugin/publish.md).
 
 ## Two files, same spec, different fidelity
 

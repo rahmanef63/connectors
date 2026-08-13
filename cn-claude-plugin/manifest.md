@@ -115,4 +115,18 @@ If the plugin root has `package.json` **plus** `bun.lock`/`bun.lockb` or `npm-sh
 
 Three things that example encodes. **`type` is required** — an entry with a `url` and no `type` is read as stdio, skipped, and reported as `MCP server "<name>" has a "url" but no "type"`. `streamable-http` is an accepted alias; SSE is deprecated. **The host is `*.convex.site`, not `*.convex.cloud`** — `registerMcpRoutes` in `convex/mcp/routes.ts` mounts `POST /mcp` on the SITE origin only, with `GET` → 405 and `OPTIONS` → 204. **Two secrets per call**, per `convex/mcp/auth.ts`: `MCP_API_KEY` gates the server, and a separate per-tenant agent token alone decides `businessId`; there is a documented single-field fallback, `Bearer <MCP_API_KEY>:<agent token>`, for clients whose form exposes one credential field.
 
-That header pair is exactly why the same server cannot go into the claude.ai connector form as documented — a plugin `.mcp.json` takes arbitrary headers, the connector dialog does not. TODO: verify whether `.mcp.json` expands `${ENV_VAR}` inside `headers` (only `${CLAUDE_PLUGIN_ROOT}` substitution there is confirmed), and TODO: verify whether a plugin's bundled `.mcp.json` can carry an `oauth` object — that is documented for `claude mcp add-json`, not for plugins. Distribution of this plugin is [`marketplace.md`](./marketplace.md).
+That header pair is exactly why the same server cannot go into the claude.ai connector form as documented — a plugin `.mcp.json` takes arbitrary headers, the connector dialog does not.
+
+## Getting a secret into those headers
+
+Both earlier open questions are answered, and the answer is not `${ENV_VAR}`.
+
+**Substitution in `headers` is limited to a fixed set.** For `http`, `sse` and `ws` servers, the fields `url`, `headers` and `headersHelper` substitute `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}` and `${CLAUDE_PROJECT_DIR}` — paths, not secrets. Arbitrary `${ENV_VAR}` expansion is documented only for a monitor's `command`.
+
+**The supported way to ship a per-user secret is `${user_config.KEY}`.** User-configuration values substitute into MCP server configs, and the docs are explicit that `headers` is where they belong: *"Put `${user_config.KEY}` in the server's `headers` field instead, which isn't shell-parsed."*
+
+**`headersHelper` is the escape hatch for anything dynamic** — Kerberos, short-lived tokens, internal SSO. Claude Code runs the command at connect time and merges its JSON output into the headers; dynamic headers override static ones of the same name. For a plugin-provided server the helper runs with its working directory set to the plugin root, so a relative path resolves inside the plugin (v2.1.195+). **It cannot read `${user_config.*}`** — that command *is* shell-parsed, and Claude Code reports the server as misconfigured rather than substituting (v2.1.207+). Have the helper read its own config file. It executes arbitrary shell, so at project or local scope it runs only after the workspace trust dialog.
+
+**Yes, a bundled `.mcp.json` can carry an `oauth` object.** It is a `.mcp.json` field, not a CLI-only one: `oauth.clientId`, `oauth.callbackPort`, `oauth.authServerMetadataUrl` (must be `https://`), and `oauth.scopes` — a single space-separated string that pins what Claude Code requests and takes precedence over both the metadata URL and `/.well-known` discovery. Leave `scopes` unset unless a security team needs a subset; since v2.1.196 an unset value means Claude Code asks for whatever `WWW-Authenticate` or protected-resource metadata advertises instead of the whole `scopes_supported` catalogue, which used to trip `invalid_scope`. `offline_access` is appended automatically when advertised, so tokens refresh without a browser round trip.
+
+Distribution of this plugin is [`marketplace.md`](./marketplace.md).
