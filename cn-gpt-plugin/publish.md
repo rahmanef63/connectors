@@ -52,7 +52,7 @@ The portal never enumerates auth modes the way developer mode does. What it does
 
 Instead of gating on auth mode, review gates on **annotations, which are mandatory for every MCP tool**: `readOnlyHint`, `openWorldHint`, `destructiveHint`. Set `openWorldHint: true` for a write tool that can change publicly visible internet state, and `destructiveHint: true` for anything that deletes, overwrites, revokes access, or sends something irreversible.
 
-TODO: verify — whether a **No Authentication** server exposing write tools can pass review. No page states a rule either way, and the annotation requirements suggest OpenAI polices *disclosure* of write risk rather than forbidding an auth mode. Do not read that as permission.
+TODO: verify — whether a **No Authentication** server exposing write tools can pass directory review. Still unstated after sweeping the help centre as well as `developers.openai.com`; already searched, do not repeat. Three sourced facts bound the answer without settling it: review grades **disclosure, not auth mode** — *"if your server advertises `readOnlyHint: false`, describing the tool as 'functionally read-only' in the justification doesn't make the tool read-only"* ([app-review](https://developers.openai.com/plugins/deploy/app-review.md)); the submission checklist presumes auth may be absent — *"authentication details, demo credentials **if needed**"* ([submission](https://developers.openai.com/plugins/deploy/submission.md)); and ChatGPT keeps a runtime backstop regardless — *"Some especially risky actions may be blocked instead of being presented for approval"* ([help centre](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta)). None of that is permission. A write tool anyone who finds the URL can invoke is a design defect before it is a review question — [`../shared/security-checklist.md`](../shared/security-checklist.md).
 
 ## Listing limits
 
@@ -67,7 +67,7 @@ TODO: verify — whether a **No Authentication** server exposing write tools can
 | Starter prompts | ≤3, each ≤128 chars, unique after Unicode/whitespace normalization, **no `@mention`** |
 | Brand colors | optional 6-digit hex; light ≥2:1 contrast vs white, dark ≥2:1 vs `#212121` |
 
-Categories (`plugin_category_unknown` if unset): Productivity, Creativity, Developer Tools, Business & Operations, Data & Analytics, Communication, Education & Research, Security, Finance, Healthcare, Travel, Entertainment, Other.
+Categories (omit it to default to `Other`; an unrecognised value is `plugin_category_unknown`): Productivity, Creativity, Developer Tools, Business & Operations, Data & Analytics, Communication, Education & Research, Security, Finance, Healthcare, Travel, Entertainment, Other. Sizes and formats for the `logo`, `composerIcon` and screenshots — plus the optional MCP-native `serverInfo.icons` — are in [`../shared/icons.md`](../shared/icons.md).
 
 ## Only if you ship UI
 

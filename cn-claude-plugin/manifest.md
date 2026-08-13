@@ -103,7 +103,7 @@ If the plugin root has `package.json` **plus** `bun.lock`/`bun.lockb` or `npm-sh
 
 ## Worked example — codex, if it shipped a plugin
 
-`/home/rahman/projects/codex` has no plugin today (grep for `.claude-plugin|marketplace.json|CLAUDE_PLUGIN_ROOT`: zero hits). One would be net-new, and would be *only* this `.mcp.json` at the plugin root:
+`codex-build-week` has no plugin today (grep for `.claude-plugin|marketplace.json|CLAUDE_PLUGIN_ROOT`: zero hits). One would be net-new, and would be *only* this `.mcp.json` at the plugin root:
 
 ```json
 { "mcpServers": { "temanusaha": {
@@ -121,7 +121,7 @@ That header pair is exactly why the same server cannot go into the claude.ai con
 
 Both earlier open questions are answered, and the answer is not `${ENV_VAR}`.
 
-**Substitution in `headers` is limited to a fixed set.** For `http`, `sse` and `ws` servers, the fields `url`, `headers` and `headersHelper` substitute `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}` and `${CLAUDE_PROJECT_DIR}` — paths, not secrets. Arbitrary `${ENV_VAR}` expansion is documented only for a monitor's `command`.
+**Substitution in `headers` is limited to a fixed set.** For `http`, `sse` and `ws` servers, the fields `url`, `headers` and `headersHelper` substitute `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}` and `${CLAUDE_PROJECT_DIR}` — paths, not secrets. Project `.mcp.json` separately supports **environment-variable expansion** — `${VAR}` and `${VAR:-default}` in `command`, `args`, `env`, `url` and `headers`, with `"Authorization": "Bearer ${API_KEY}"` as the documented example. `TODO: verify` whether that applies to a **plugin-bundled** `.mcp.json`: the plugin table lists only the three path placeholders, but never says plugin servers are excluded, and the reference does say plugin servers get the same environment as manually configured ones.
 
 **The supported way to ship a per-user secret is `${user_config.KEY}`.** User-configuration values substitute into MCP server configs, and the docs are explicit that `headers` is where they belong: *"Put `${user_config.KEY}` in the server's `headers` field instead, which isn't shell-parsed."*
 

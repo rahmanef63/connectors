@@ -46,7 +46,7 @@ Smoke test:
 ```bash
 curl -X POST $BASE/mcp -H "authorization: Bearer $TOKEN" \
   -H "content-type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize"}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"0.0.0"}}}'
 # then tools/list, then tools/call
 ```
 

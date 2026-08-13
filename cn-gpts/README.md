@@ -43,7 +43,7 @@ GPT Builder's **Configure** tab. The worked example ships the whole package as a
 
 ## Worked example
 
-`/home/rahman/projects/codex` (`github.com/rahmanef63/codex-build-week`), a Next.js + Convex app:
+`codex-build-week` (`github.com/rahmanef63/codex-build-week`), a Next.js + Convex app:
 
 | Path | What it is |
 |---|---|

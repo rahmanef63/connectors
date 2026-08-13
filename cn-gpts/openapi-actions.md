@@ -103,9 +103,9 @@ Labels confirmed — [authentication](https://developers.openai.com/api/docs/act
 
 `alfa.md:189`: a private demo may leave the Privacy Policy URL blank; before sharing the GPT via public link or the GPT Store you must supply a valid public privacy-policy URL.
 
-The gate, confirmed: **private GPT → not required. Public link or GPT Store → required.** Publishing without one is blocked with `Public actions require valid privacy policy URLs`. See [Sharing and publishing GPTs](https://help.openai.com/en/articles/8798878-sharing-and-publishing-gpts) and [Troubleshooting GPTs](https://help.openai.com/en/articles/11325361-troubleshooting-gpts). Note `help.openai.com` returns **403 to automated fetches**, so those two pages must be opened in a browser to re-check.
+The gate, confirmed on three help-centre pages, and it is **per action, not per GPT**: private GPT → not required; public link or GPT Store → *"each public action must include a valid Privacy Policy URL"*, so one action missing it blocks the whole publish. [Configuring actions](https://help.openai.com/en/articles/9442513-configuring-actions-in-gpts): *"Each action can include a Privacy Policy URL. / Public GPTs (link or GPT Store) with actions must include a valid privacy policy URL."* [Sharing and publishing](https://help.openai.com/en/articles/8798878-sharing-and-publishing-gpts) lists *"The GPT uses actions without a valid Privacy Policy URL"* among the conditions making a GPT ineligible; [Troubleshooting](https://help.openai.com/en/articles/11325361-troubleshooting-gpts) repeats it on both the greyed-out-sharing and blocked-publishing checklists. **Before any of this bites, check you can publish at all:** *"Personal ChatGPT accounts, including Free, Go, Plus, and Pro, cannot create or publish new GPTs"*, and that *"cannot be resolved by completing a builder profile, changing GPT settings, verifying a domain, or submitting an appeal."*
 
-TODO: verify what "valid" means mechanically — builders report the error while a policy URL *is* configured, which suggests the URL is fetched and must return 200 public HTML, but no page states the check.
+TODO: verify what "valid" means mechanically. All three pages say "valid" and none defines it — no page states that the URL is fetched, must return 200, must serve public HTML, or must sit on a verified domain; the one adjacent rule that *is* stated governs a different field (*"Only verified domains can be used for the public website link shown in your builder profile"*). Target a reachable public HTTPS page with no login wall and expect no error detail beyond ineligibility. Already searched, do not repeat: those three pages end to end, plus a corpus-wide grep for the error string builders quote — it appears nowhere OpenAI publishes. Note `help.openai.com` returns **403 to automated fetches**; open them in a browser to re-check.
 
 Different gate from the OpenAI plugins directory, which requires a privacy-policy URL for every MCP-backed submission — HTTPS, ≤1024 chars, matching your verified publisher identity, and disclosing every data category you return. See [`../cn-gpt-plugin/publish.md`](../cn-gpt-plugin/publish.md).
 
@@ -121,11 +121,11 @@ The worked example commits both and `alfa.md:191` requires identical operation I
 | Mutation fires with no confirmation | it is a GET that mutates — GETs default to `false` | make it POST/PATCH/DELETE, or set `x-openai-isConsequential: true` explicitly |
 | GPT invents an order/product ID | Instructions never forbade it | "Jangan pernah mengarang ID" + look it up with a read op first (`alfa.md:90`) |
 | GPT reports stale numbers | other clients wrote between turns | Instructions must force a re-read on the same turn (`alfa.md:40`) |
-| **Test** button fails, `curl` works | schema/auth/description mismatch, or the workspace blocks the domain | check custom-header auth, then allowlist the Action domain (`alfa.md:253`) |
+| **Test** button fails, `curl` works | schema/auth/description mismatch, or the workspace blocks the domain — *"If your workspace allows zero action domains, GPT custom actions cannot execute because no action domain can pass allowlist checks"* | check custom-header auth, then allowlist the Action domain (`alfa.md:253`) |
 
 ## When NOT to use this
 
-**Short answer: Actions are per-GPT and OpenAI-only. MCP is one server every host reaches.** If any row below is true, build [`../cn-mcp-core/`](../cn-mcp-core/README.md) instead.
+**Short answer: Actions are per-GPT and OpenAI-only. MCP is one server every host reaches.** They are also mutually exclusive inside one GPT — *"A GPT can use either apps or actions, but not both at the same time"* — and *"Actions are not available for Pro mode"* ([Configuring actions](https://help.openai.com/en/articles/9442513-configuring-actions-in-gpts)). If any row below is true, build [`../cn-mcp-core/`](../cn-mcp-core/README.md) instead.
 
 | Signal | Why Actions cannot carry it |
 |---|---|

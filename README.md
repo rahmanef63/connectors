@@ -9,6 +9,8 @@ Documentation you *read*, not software you install. Point Claude Code, Codex or 
 
 You build **one** MCP server: a single HTTPS endpoint that speaks JSON-RPC. ChatGPT, Claude.ai, Claude Code, Cursor and every other host connect to that same endpoint with the same protocol. Notion, Stripe, Linear and GitHub all ship exactly one hosted server and let every host connect to it — nobody ships a server per vendor. What differs between hosts is **how a client registers**, never what your server does. So this repo has one folder that builds the server, and vendor folders that describe registration and distribution on top of it. If you catch yourself branching server logic on which AI is calling, you have taken a wrong turn.
 
+Two things come out the far end, not one. The server, and a **copy-paste-ready setup form** — one tab per host, every value the user must move into another application sitting behind a copy button, endpoint and token alike. That form is the whole difference between a server that exists and a server anyone can connect to, so it has its own spec: [`shared/setup-form.md`](./shared/setup-form.md).
+
 ## Which folder
 
 | Your situation | Folder |
@@ -36,17 +38,7 @@ Each folder's `README.md` is the orientation and the decision table; the files b
 
 ## shared
 
-Cross-cutting files, read alongside whichever folder you picked:
-
-| File | Open when |
-|---|---|
-| [`shared/tool-design.md`](./shared/tool-design.md) | designing the tool surface — highest leverage, most skipped |
-| [`shared/clients.md`](./shared/clients.md) | comparing what each host requires before you commit |
-| [`shared/oauth.md`](./shared/oauth.md) | implementing OAuth 2.1 + PKCE |
-| [`shared/transport.md`](./shared/transport.md) | JSON-RPC shape, SSE, status codes, discovery documents |
-| [`shared/convex.md`](./shared/convex.md) | your backend is Convex — read before writing code |
-| [`shared/pitfalls.md`](./shared/pitfalls.md) | something is broken (16 real ones, symptom → cause → fix) |
-| [`shared/security-checklist.md`](./shared/security-checklist.md) | about to expose the endpoint to anyone |
+Nine cross-cutting files, read alongside whichever folder you picked — tool design, per-host clients, transport, OAuth, Convex, the setup form, icons, pitfalls, the security gate. The "open when" table for all of them lives in [`shared/README.md`](./shared/README.md); pull single files from there on demand.
 
 ## Reference implementation
 

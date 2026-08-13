@@ -9,7 +9,7 @@ Produce one remote MCP server in the target codebase, plus whatever registration
 
 ## Load only what applies
 
-There are 21 Markdown files here. Reading all of them costs tokens you want for the build. Open the folder that matches the goal, then pull single `shared/` files on demand. The per-goal orders below are the intended budget.
+There are 24 Markdown files here. Reading all of them costs tokens you want for the build. Open the folder that matches the goal, then pull single `shared/` files on demand ([`shared/README.md`](./shared/README.md) is that folder's own table). The per-goal orders below are the intended budget.
 
 ## File map
 
@@ -22,11 +22,14 @@ There are 21 Markdown files here. Reading all of them costs tokens you want for 
 | `cn-mcp-core/phase-1-bearer.md` | the endpoint: JSON-RPC dispatch, bearer auth, tool registry |
 | `cn-mcp-core/phase-2-oauth.md` | the authorization half: consent page, auth codes, token exchange, discovery documents |
 | `cn-mcp-core/phase-3-admin-ui.md` | where a human mints, inspects and revokes their own tokens |
+| `shared/README.md` | router for `shared/` — the "open when" table for all nine files |
 | `shared/tool-design.md` | naming, granularity, response shape — decides whether the server is any good |
 | `shared/clients.md` | per-host matrix: transport accepted, registration path, whether a bridge is needed |
 | `shared/oauth.md` | OAuth 2.1 + PKCE S256 in implementable detail |
 | `shared/transport.md` | `POST /mcp` JSON-RPC shape, SSE, status codes, discovery documents |
 | `shared/convex.md` | Convex-only gotchas, starting with the SITE vs CLOUD origin split |
+| `shared/setup-form.md` | the copy-paste-ready setup form — the exact string each host wants, the card spec, a dependency-free `CopyField` |
+| `shared/icons.md` | every image a connector needs — MCP's `Icon` schema, OpenAI's two required squares, Claude's absent field, one asset set for all three |
 | `shared/pitfalls.md` | 16 real failures, symptom → root cause → fix |
 | `shared/security-checklist.md` | pass/fail gate before the endpoint is reachable by anyone |
 | `cn-claude-plugin/README.md` | connector vs plugin, the surface picker, the claude.ai connector path |
@@ -42,9 +45,10 @@ There are 21 Markdown files here. Reading all of them costs tokens you want for 
 
 | Goal | Order |
 |---|---|
-| **Build the server** | `cn-mcp-core/README.md` → `phase-1-bearer.md` → `shared/tool-design.md` → `shared/transport.md` → `shared/convex.md` *(Convex only)* → `phase-2-oauth.md` + `shared/oauth.md` *(any consumer host)* → `phase-3-admin-ui.md` *(per-user tokens)* → `shared/security-checklist.md` |
-| **Ship to Claude** | `cn-claude-plugin/README.md` → stop if the answer is "paste the URL" → `manifest.md` *(team `.mcp.json` or a shareable bundle)* → `marketplace.md` *(others install it)* |
-| **Ship to ChatGPT** | `cn-gpt-plugin/README.md` → `register.md` → `publish.md` *(public directory only)*; if OAuth is missing, detour to `shared/oauth.md` + `cn-mcp-core/phase-2-oauth.md` first |
+| **Build the server** | `cn-mcp-core/README.md` → `cn-mcp-core/phase-1-bearer.md` → `shared/tool-design.md` → `shared/transport.md` → `shared/convex.md` *(Convex only)* → `cn-mcp-core/phase-2-oauth.md` + `shared/oauth.md` *(any consumer host)* → `cn-mcp-core/phase-3-admin-ui.md` *(per-user tokens)* → `shared/security-checklist.md` |
+| **Ship the setup UI** | `shared/setup-form.md` — the spec, read it first → `cn-mcp-core/phase-3-admin-ui.md` *(what the card sits inside)* → `shared/clients.md` *(per-host detail behind a tab)* → `shared/icons.md` *(only if the card carries branding)* |
+| **Ship to Claude** | `cn-claude-plugin/README.md` → stop if the answer is "paste the URL" → `cn-claude-plugin/manifest.md` *(team `.mcp.json` or a shareable bundle)* → `cn-claude-plugin/marketplace.md` *(others install it)*. Skip `shared/icons.md`: Claude exposes no icon field anywhere |
+| **Ship to ChatGPT** | `cn-gpt-plugin/README.md` → `cn-gpt-plugin/register.md` → `shared/icons.md` + `cn-gpt-plugin/publish.md` *(public directory only — `logo` and `composerIcon` are both required, submission is rejected without them)*; if OAuth is missing, detour to `shared/oauth.md` + `cn-mcp-core/phase-2-oauth.md` first |
 | **Build a Custom GPT** | `cn-gpts/README.md` → `cn-gpts/openapi-actions.md`. Skips `cn-mcp-core/` entirely — Actions are not MCP |
 | **Debug something broken** | `shared/pitfalls.md` first → `shared/transport.md` *(shape/status errors)* → `shared/convex.md` *(Convex)* → `shared/oauth.md` *(consent, codes, discovery)* |
 
@@ -55,7 +59,7 @@ There are 21 Markdown files here. Reading all of them costs tokens you want for 
 - **This repo is not installable.** Never create `.claude-plugin/`, never create `skills/`, never add YAML frontmatter. Those artifacts belong in the *user's* project when `cn-claude-plugin/manifest.md` calls for them.
 - **Every file opens with an H1, then exactly `**Scope:**` and `**Assumes:**`, in that order, before anything else.** Tables over paragraphs. No filler, no marketing.
 - **Honesty beats fluency.** If a claim is not confirmed by a doc you actually fetched or a file you actually read, write `TODO: verify` inline. A confident wrong registration requirement costs the reader hours.
-- **The worked example is at Phase 1, bearer only.** `github.com/rahmanef63/codex-build-week`, cloned at `/home/rahman/projects/codex`. Its `convex/mcp/routes.ts` header comment defers OAuth 2.1 + PKCE to a later phase. Cite it with real paths and real snippets; never describe it as having OAuth today.
+- **The worked example is at Phase 1, bearer only.** `github.com/rahmanef63/codex-build-week`, cloned at `codex-build-week`. Its `convex/mcp/routes.ts` header comment defers OAuth 2.1 + PKCE to a later phase. Cite it with real paths and real snippets; never describe it as having OAuth today.
 
 ## Before you return
 

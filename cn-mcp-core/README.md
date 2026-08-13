@@ -20,11 +20,13 @@ That is the whole design. If you find yourself branching on which AI is calling,
 | Building the endpoint | [`phase-1-bearer.md`](./phase-1-bearer.md) |
 | Adding OAuth | [`phase-2-oauth.md`](./phase-2-oauth.md) |
 | Adding a settings UI | [`phase-3-admin-ui.md`](./phase-3-admin-ui.md) |
+| Building the connect / setup screen | [`../shared/setup-form.md`](../shared/setup-form.md) — the spec for the card: one copy target per host |
 | Wiring a specific client | [`../shared/clients.md`](../shared/clients.md) |
 | Designing the tool surface | [`../shared/tool-design.md`](../shared/tool-design.md) ← **highest leverage, most-skipped** |
 | Implementing the OAuth half | [`../shared/oauth.md`](../shared/oauth.md) |
 | Choosing/serving the transport | [`../shared/transport.md`](../shared/transport.md) |
 | On Convex | [`../shared/convex.md`](../shared/convex.md) — **read before writing code** |
+| Producing icons or a directory logo | [`../shared/icons.md`](../shared/icons.md) — two squares are required by OpenAI, optional in MCP, no field in Claude |
 | Debugging something broken | [`../shared/pitfalls.md`](../shared/pitfalls.md) (16 real ones) |
 | Shipping it | [`../shared/security-checklist.md`](../shared/security-checklist.md) — the gate before you expose it |
 
