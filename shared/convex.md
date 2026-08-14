@@ -81,6 +81,15 @@ That collides head-on with OpenAI's file-param contract, whose published example
 
 Return that descriptor from a Convex action and **`tools/list` throws for every client** — not just the tool with the file input. The whole registry goes dark, and nothing catches it locally because the tool table is a plain object until the moment it crosses the Convex boundary.
 
+**Whether you are exposed depends on how you serve the RPC, and it is worth knowing which you are:**
+
+| Your endpoint | `$` keys reach the encoder? |
+|---|---|
+| `action({ … })`, called over the Convex client | **Yes** — the return value is encoded. This is the outage. |
+| `httpAction`, returning `new Response(JSON.stringify(…))` | No — you hand back bytes, and Convex never inspects them. |
+
+The second form is safe today, which is exactly why it drifts: someone moves the RPC behind an action for auth or rate limiting, and a schema that worked for a year takes the registry down on deploy. Inline anyway, and keep the test.
+
 Fix: **inline the file object** into `properties.file`. JSON Schema treats an inline subschema as equivalent, and the file-param rules are about the four properties and the `required` list, not about how the schema is referenced. See [`../cn-gpt-plugin/register.md`](../cn-gpt-plugin/register.md) for the contract itself.
 
 Worth a test, because the failure is silent until a client calls you:

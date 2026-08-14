@@ -113,7 +113,7 @@ Codes: `invalid_input`, `unauthorized`, `insufficient_scope`, `not_found`, `conf
 
 ## Contract testing
 
-Call `assertFileParamsConformant(tool)` on every tool in your registry. It catches the four failures that are silent locally and fatal at Scan Tools: a missing property, an over-required optional, a field named in `_meta` that is not in `properties`, and any `$`-prefixed key — which is valid JSON Schema but **breaks Convex encoding and takes down all of `tools/list`**.
+Call `assertFileParamsConformant(tool)` on every tool in your registry. It catches the four failures that are silent locally and fatal at Scan Tools: a missing property, an over-required optional, a field named in `_meta` that is not in `properties`, and any `$`-prefixed key — valid JSON Schema, but fatal to `tools/list` on any server whose RPC is a **Convex action** (see [`../../shared/convex.md`](../../shared/convex.md) §11). An `httpAction` that stringifies into a `Response` is not exposed; the check stays on regardless, because the same schema gets vendored into both and inlining costs nothing.
 
 ```ts
 it("every tool's file params are conformant", () => {
