@@ -9,7 +9,7 @@ Produce one remote MCP server in the target codebase, plus whatever registration
 
 ## Load only what applies
 
-There are 24 Markdown files here. Reading all of them costs tokens you want for the build. Open the folder that matches the goal, then pull single `shared/` files on demand ([`shared/README.md`](./shared/README.md) is that folder's own table). The per-goal orders below are the intended budget.
+There are 25 Markdown files here. Reading all of them costs tokens you want for the build. Open the folder that matches the goal, then pull single `shared/` files on demand ([`shared/README.md`](./shared/README.md) is that folder's own table). The per-goal orders below are the intended budget.
 
 ## File map
 
@@ -22,13 +22,14 @@ There are 24 Markdown files here. Reading all of them costs tokens you want for 
 | `cn-mcp-core/phase-1-bearer.md` | the endpoint: JSON-RPC dispatch, bearer auth, tool registry |
 | `cn-mcp-core/phase-2-oauth.md` | the authorization half: consent page, auth codes, token exchange, discovery documents |
 | `cn-mcp-core/phase-3-admin-ui.md` | where a human mints, inspects and revokes their own tokens |
-| `shared/README.md` | router for `shared/` — the "open when" table for all nine files |
+| `shared/README.md` | router for `shared/` — the "open when" table for all ten files |
 | `shared/tool-design.md` | naming, granularity, response shape — decides whether the server is any good |
 | `shared/clients.md` | per-host matrix: transport accepted, registration path, whether a bridge is needed |
 | `shared/oauth.md` | OAuth 2.1 + PKCE S256 in implementable detail |
 | `shared/transport.md` | `POST /mcp` JSON-RPC shape, SSE, status codes, discovery documents |
 | `shared/convex.md` | Convex-only gotchas, starting with the SITE vs CLOUD origin split |
 | `shared/setup-form.md` | the copy-paste-ready setup form — the exact string each host wants, the card spec, a dependency-free `CopyField` |
+| `shared/file-inputs.md` | files and images both directions — ChatGPT's file-param contract, the SSRF and size guards, where the bytes live, `ImageContent` on the way out |
 | `shared/icons.md` | every image a connector needs — MCP's `Icon` schema, OpenAI's two required squares, Claude's absent field, one asset set for all three |
 | `shared/pitfalls.md` | 16 real failures, symptom → root cause → fix |
 | `shared/security-checklist.md` | pass/fail gate before the endpoint is reachable by anyone |
@@ -46,6 +47,7 @@ There are 24 Markdown files here. Reading all of them costs tokens you want for 
 | Goal | Order |
 |---|---|
 | **Build the server** | `cn-mcp-core/README.md` → `cn-mcp-core/phase-1-bearer.md` → `shared/tool-design.md` → `shared/transport.md` → `shared/convex.md` *(Convex only)* → `cn-mcp-core/phase-2-oauth.md` + `shared/oauth.md` *(any consumer host)* → `cn-mcp-core/phase-3-admin-ui.md` *(per-user tokens)* → `shared/security-checklist.md` |
+| **Accept an image or file** | `shared/file-inputs.md` — the whole contract, both directions → `shared/convex.md` *(Convex: `$`-keys are fatal here)* → `shared/security-checklist.md` |
 | **Ship the setup UI** | `shared/setup-form.md` — the spec, read it first → `cn-mcp-core/phase-3-admin-ui.md` *(what the card sits inside)* → `shared/clients.md` *(per-host detail behind a tab)* → `shared/icons.md` *(only if the card carries branding)* |
 | **Ship to Claude** | `cn-claude-plugin/README.md` → stop if the answer is "paste the URL" → `cn-claude-plugin/manifest.md` *(team `.mcp.json` or a shareable bundle)* → `cn-claude-plugin/marketplace.md` *(others install it)*. Skip `shared/icons.md`: Claude exposes no icon field anywhere |
 | **Ship to ChatGPT** | `cn-gpt-plugin/README.md` → `cn-gpt-plugin/register.md` → `shared/icons.md` + `cn-gpt-plugin/publish.md` *(public directory only — `logo` and `composerIcon` are both required, submission is rejected without them)*; if OAuth is missing, detour to `shared/oauth.md` + `cn-mcp-core/phase-2-oauth.md` first |

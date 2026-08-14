@@ -9,6 +9,27 @@ Documentation you *read*, not software you install. Point Claude Code, Codex or 
 
 You build **one** MCP server: a single HTTPS endpoint that speaks JSON-RPC. ChatGPT, Claude.ai, Claude Code, Cursor and every other host connect to that same endpoint with the same protocol. Notion, Stripe, Linear and GitHub all ship exactly one hosted server and let every host connect to it — nobody ships a server per vendor. What differs between hosts is **how a client registers**, never what your server does. So this repo has one folder that builds the server, and vendor folders that describe registration and distribution on top of it. If you catch yourself branching server logic on which AI is calling, you have taken a wrong turn.
 
+```mermaid
+flowchart LR
+    CG["ChatGPT<br/><i>OAuth or none</i>"]
+    CA["claude.ai<br/><i>OAuth only</i>"]
+    CC["Claude Code<br/><i>any header</i>"]
+    CU["Cursor<br/><i>any header</i>"]
+    MR["mcp-remote<br/><i>stdio bridge</i>"]
+
+    CG --> EP
+    CA --> EP
+    CC --> EP
+    CU --> EP
+    MR --> EP
+
+    EP["<b>POST /mcp</b><br/>one endpoint, JSON-RPC"]
+    EP --> TR["tool registry"]
+    TR --> APP["your app and database"]
+```
+
+Every host on the left speaks the identical protocol to the identical endpoint. The italics are the *only* thing that differs between them — how a client proves who it is — and that difference is settled at registration time, never in your dispatcher.
+
 Two things come out the far end, not one. The server, and a **copy-paste-ready setup form** — one tab per host, every value the user must move into another application sitting behind a copy button, endpoint and token alike. That form is the whole difference between a server that exists and a server anyone can connect to, so it has its own spec: [`shared/setup-form.md`](./shared/setup-form.md).
 
 ## Which folder
@@ -22,6 +43,25 @@ Two things come out the far end, not one. The server, and a **copy-paste-ready s
 | Something is broken, or I need one cross-cutting detail | [`shared/`](#shared) |
 
 Both ChatGPT paths can coexist: Actions and MCP are two front doors onto the same routes, the same validation, the same audit log.
+
+```mermaid
+flowchart TD
+    Q{"What are you<br/>actually doing?"}
+    Q -->|"one Custom GPT, REST already exists"| G["<b>cn-gpts/</b><br/>OpenAPI Actions<br/><i>needs no MCP server</i>"]
+    Q -->|"an AI should read and write my app"| C
+
+    subgraph BUILD["cn-mcp-core/ — build it once"]
+        C["phase-1-bearer<br/><i>the endpoint</i>"] --> O["phase-2-oauth<br/><i>only for ChatGPT / claude.ai</i>"]
+        O --> A["phase-3-admin-ui<br/><i>mint and revoke</i>"]
+    end
+
+    A --> W{"Who installs it?"}
+    W -->|"just me"| R["<b>cn-gpt-plugin/</b><br/>register.md — no review"]
+    W -->|"Claude users"| L["<b>cn-claude-plugin/</b><br/>manifest + marketplace"]
+    W -->|"the public"| P["<b>cn-gpt-plugin/</b><br/>publish.md — reviewed"]
+```
+
+Stop at the first box that answers your question. Most people never reach the bottom row: a server you use yourself needs `phase-1` and `register.md` and nothing else.
 
 Each folder's `README.md` is the orientation and the decision table; the files beside it are the deep ones you open only once you have decided:
 
@@ -38,7 +78,7 @@ Each folder's `README.md` is the orientation and the decision table; the files b
 
 ## shared
 
-Nine cross-cutting files, read alongside whichever folder you picked — tool design, per-host clients, transport, OAuth, Convex, the setup form, icons, pitfalls, the security gate. The "open when" table for all of them lives in [`shared/README.md`](./shared/README.md); pull single files from there on demand.
+Ten cross-cutting files, read alongside whichever folder you picked — tool design, per-host clients, transport, OAuth, Convex, the setup form, file and image inputs, icons, pitfalls, the security gate. The "open when" table for all of them lives in [`shared/README.md`](./shared/README.md); pull single files from there on demand.
 
 ## Reference implementation
 

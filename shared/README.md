@@ -1,6 +1,6 @@
 # shared — cross-cutting files
 
-**Scope:** the router for this folder — which of the nine files to open, and when.
+**Scope:** the router for this folder — which of the ten files to open, and when.
 **Assumes:** you already picked a folder ([`../cn-mcp-core/`](../cn-mcp-core/README.md), [`../cn-claude-plugin/`](../cn-claude-plugin/README.md), [`../cn-gpt-plugin/`](../cn-gpt-plugin/README.md), [`../cn-gpts/`](../cn-gpts/README.md)). Nothing here is an entry point on its own.
 
 Pull these one at a time, on demand. Reading the folder end to end costs tokens you want for the build.
@@ -15,6 +15,7 @@ Pull these one at a time, on demand. Reading the folder end to end costs tokens 
 | [`oauth.md`](./oauth.md) | implementing OAuth 2.1 + PKCE S256 |
 | [`convex.md`](./convex.md) | your backend is Convex — read before writing code |
 | [`setup-form.md`](./setup-form.md) | building the screen where a user connects the server — the exact string per host, the card spec, a dependency-free `CopyField` |
+| [`file-inputs.md`](./file-inputs.md) | a tool must accept an image or file, or return one — ChatGPT's file-param contract, the SSRF and size guards, where the bytes live |
 | [`icons.md`](./icons.md) | producing icons and logos — two square images are **required** for an OpenAI directory submission, optional in MCP, and Claude has no field at all |
 | [`pitfalls.md`](./pitfalls.md) | something is broken (16 real ones, symptom → cause → fix) |
 | [`security-checklist.md`](./security-checklist.md) | about to expose the endpoint to anyone |
@@ -25,6 +26,6 @@ Pull these one at a time, on demand. Reading the folder end to end costs tokens 
 
 ## Order that usually works
 
-Building → `tool-design.md`, `transport.md`, `convex.md` *(Convex only)*, `oauth.md` *(Phase 2)*.
+Building → `tool-design.md`, `transport.md`, `convex.md` *(Convex only)*, `oauth.md` *(Phase 2)*, `file-inputs.md` *(only if a tool takes a file)*.
 Shipping → `setup-form.md`, `icons.md` *(directory submission)*, then `security-checklist.md` as the gate.
 Broken → `pitfalls.md` first, always.

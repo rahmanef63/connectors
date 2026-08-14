@@ -55,7 +55,7 @@ Not purely a plan question either — *"Developer mode availability can depend o
 | Reachability | public HTTPS, or Secure MCP Tunnel | `localhost` and `stdio` are fine |
 | Metadata changes | explicit **Refresh** step | reconnect and it re-lists |
 
-Full per-host comparison: [`../shared/clients.md`](../shared/clients.md).
+Full per-host comparison: [`../shared/clients.md`](../shared/clients.md). If a tool needs to accept an image or a file, that is ChatGPT's `openai/fileParams` contract — [`../shared/file-inputs.md`](../shared/file-inputs.md).
 
 ## Transport
 

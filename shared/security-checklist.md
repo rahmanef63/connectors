@@ -17,3 +17,4 @@
 - [ ] Service-account env bypass is opt-in (skipped when the env var is unset)
 - [ ] Per-minute **and** per-day rate limits on every write tool
 - [ ] Multi-tenant: membership re-checked on EVERY call, not just at mint
+- [ ] Any tool that fetches a caller-supplied URL authorizes BEFORE fetching, refuses non-https and private address space, allowlists the content type, and caps the real byte length — [`file-inputs.md`](./file-inputs.md)
