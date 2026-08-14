@@ -18,6 +18,7 @@ There are 27 Markdown files here. Two live in `docs/` and are dated point-in-tim
 | `README.md` | human router: thesis, folder decision table, dependency line, license |
 | `AGENTS.md` | this file — agent router |
 | `LICENSE` | MIT, 2026 rahmanef63 |
+| `packages/mcp-files/` | **code** — the shared OpenAI file-input contract: schema builders, SSRF-safe ingestion, store/attach adapter seams. `README.md` there is the quickstart |
 | `docs/2026-08-14-spec-baseline.md` | which specs the guidance is written against, and when each was verified |
 | `docs/2026-08-14-ssot-gap-report.md` | point-in-time audit: CareerPack vs this repo, and what a shared code layer would own |
 | `cn-mcp-core/README.md` | the design invariant, the phase decision tree, framework/DB adaptation notes, spec links |
@@ -60,7 +61,7 @@ There are 27 Markdown files here. Two live in `docs/` and are dated point-in-tim
 
 - **One server, host-agnostic.** It lives in `cn-mcp-core/` and nowhere else. If a sentence you are about to write branches server behaviour by which AI is calling, delete it.
 - **`cn-claude-plugin/` and `cn-gpt-plugin/` assume `cn-mcp-core/` is built and deployed. `cn-gpts/` does not.**
-- **This repo is not installable.** Never create `.claude-plugin/`, never create `skills/`, never add YAML frontmatter. Those artifacts belong in the *user's* project when `cn-claude-plugin/manifest.md` calls for them.
+- **The guide folders are not installable.** `packages/` is; everything else is read-only prose. Never create `.claude-plugin/`, never create `skills/`, never add YAML frontmatter. Those artifacts belong in the *user's* project when `cn-claude-plugin/manifest.md` calls for them.
 - **Every file opens with an H1, then exactly `**Scope:**` and `**Assumes:**`, in that order, before anything else.** Tables over paragraphs. No filler, no marketing.
 - **Honesty beats fluency.** If a claim is not confirmed by a doc you actually fetched or a file you actually read, write `TODO: verify` inline. A confident wrong registration requirement costs the reader hours.
 - **The worked example is at Phase 1, bearer only.** `github.com/rahmanef63/codex-build-week`, cloned at `codex-build-week`. Its `convex/mcp/routes.ts` header comment defers OAuth 2.1 + PKCE to a later phase. Cite it with real paths and real snippets; never describe it as having OAuth today.

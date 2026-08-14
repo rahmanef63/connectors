@@ -1,6 +1,7 @@
 # Files and images, both directions
 
 **Scope:** getting a file *into* a tool (ChatGPT's file-param contract, the fetch, the guards, where the bytes live) and getting an image *out* of one.
+**Implementation:** [`../packages/mcp-files/`](../packages/mcp-files/README.md) ships this contract as code — schema builders, the guards below, and the adapter seams. Prefer it to hand-rolling.
 **Assumes:** a working server per [`../cn-mcp-core/`](../cn-mcp-core/README.md). Everything here is additive — a text-only server needs none of it.
 
 The use case that drives this: a user generates a poster in ChatGPT and wants it on their site. The model cannot hand you bytes — tool arguments are JSON, and no model reliably emits a megabyte of base64. So the transfer is **by reference**: the host gives you a short-lived URL and your server fetches it.
