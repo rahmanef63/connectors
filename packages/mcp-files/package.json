@@ -4,12 +4,23 @@
   "description": "Shared OpenAI file-input contract for MCP tools: schema builders, SSRF-safe ingestion, storage adapters.",
   "license": "MIT",
   "type": "module",
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
-  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bundle:single": "node scripts/bundle-single.mjs"
   },
-  "devDependencies": { "typescript": "^5.6.0", "vitest": "^2.1.0" }
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
 }

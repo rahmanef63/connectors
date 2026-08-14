@@ -34,6 +34,11 @@ const FILE_OBJECT: JsonSchema = {
   additionalProperties: false,
 };
 
+/* A JSON round-trip rather than structuredClone: the latter is absent from
+   some MCP host runtimes, Convex's V8 isolate among them, and a schema literal
+   holds nothing a JSON clone cannot carry. */
+const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
 /* Inlined on purpose, never `$defs` + `$ref`.
  *
  * The published OpenAI example uses `$defs`. That form is equivalent JSON
@@ -41,12 +46,12 @@ const FILE_OBJECT: JsonSchema = {
  * such a descriptor throws `Field name $defs starts with a '$', which is
  * reserved` and takes down the whole of `tools/list`, not just the tool with
  * the file input. Inlining costs nothing and works on every backend. */
-export const openAIFileSchema = (): JsonSchema => structuredClone(FILE_OBJECT);
+export const openAIFileSchema = (): JsonSchema => clone(FILE_OBJECT);
 
 /** An array of files, for tools that accept several at once. */
 export const openAIFileArraySchema = (opts: { minItems?: number; maxItems?: number } = {}): JsonSchema => ({
   type: "array",
-  items: structuredClone(FILE_OBJECT),
+  items: clone(FILE_OBJECT),
   ...(opts.minItems === undefined ? {} : { minItems: opts.minItems }),
   ...(opts.maxItems === undefined ? {} : { maxItems: opts.maxItems }),
 });

@@ -121,12 +121,29 @@ it("every tool's file params are conformant", () => {
 });
 ```
 
+## Consuming it without npm
+
+A Convex deployment bundles only its own `convex/` directory and cannot install
+from a registry. `npm run bundle:single` emits `dist/single.ts` — the whole
+package as one dependency-free module with a provenance header and a checksum.
+Vendor that file, and re-run the script to pick up fixes.
+
+```
+/* GENERATED — do not edit here.
+ * @rahmanef/mcp-files@0.1.0, bundled to a single module.
+ * checksum: e804b6ab73d7 */
+```
+
+CareerPack consumes it this way today at `convex/mcp/_vendor/mcpFiles.ts`.
+Replace it with the npm dependency once the package is published.
+
 ## Scripts
 
 ```bash
 npm run typecheck   # tsc --noEmit
 npm test            # vitest run  — 46 tests
-npm run build       # emits dist/ with .d.ts
+npm run build          # emits dist/ with .d.ts
+npm run bundle:single  # emits dist/single.ts for vendoring
 ```
 
 Zero runtime dependencies. `fetch` is injectable via `ingest.fetchImpl` for tests and for runtimes without a global.
