@@ -1,6 +1,6 @@
 # Convex-specific — read before writing code
 
-**Scope:** the Convex-only traps that break an MCP server, starting with the SITE vs CLOUD origin split.
+**Scope:** the twelve Convex-only traps that break an MCP server, starting with the SITE vs CLOUD origin split.
 **Assumes:** your backend is Convex (self-hosted or Cloud) and you are about to write the `/mcp` route.
 
 These bit hard in real deployments and are not in the generic recipe.
@@ -67,3 +67,58 @@ Sidebars filter through a `by_workspace` index. MCP-created rows without `worksp
 ## 10. Validator drift on read tools
 
 A dispatcher that forgets to pass `userId` to an ownership-scoped query throws Convex `ArgumentValidationError`, which reaches the model as a vague "validation/internal error". Pass every required arg explicitly.
+
+## 11. Convex refuses any key starting with `$` — which breaks ChatGPT file params
+
+`convexToJson` throws `Field name $defs starts with a '$', which is reserved` on any object key beginning with `$`, anywhere in a returned value.
+
+That collides head-on with OpenAI's file-param contract, whose published example declares the file object under `$defs` and references it with `$ref`:
+
+```json
+"$defs": { "OpenAIFile": { … } },
+"properties": { "file": { "$ref": "#/$defs/OpenAIFile" } }
+```
+
+Return that descriptor from a Convex action and **`tools/list` throws for every client** — not just the tool with the file input. The whole registry goes dark, and nothing catches it locally because the tool table is a plain object until the moment it crosses the Convex boundary.
+
+Fix: **inline the file object** into `properties.file`. JSON Schema treats an inline subschema as equivalent, and the file-param rules are about the four properties and the `required` list, not about how the schema is referenced. See [`../cn-gpt-plugin/register.md`](../cn-gpt-plugin/register.md) for the contract itself.
+
+Worth a test, because the failure is silent until a client calls you:
+
+```ts
+const walk = (n: unknown, path: string) => {
+  if (!n || typeof n !== "object") return;
+  if (Array.isArray(n)) return n.forEach((x, i) => walk(x, `${path}[${i}]`));
+  for (const [k, v] of Object.entries(n)) {
+    expect(k.startsWith("$"), `${path}.${k} is reserved by Convex`).toBe(false);
+    walk(v, `${path}.${k}`);
+  }
+};
+for (const t of TOOLS) walk(t.inputSchema, t.name);
+```
+
+## 12. Convex wraps thrown errors, so sentinel comparisons stop matching
+
+A `throw new Error("FORBIDDEN")` inside a query, mutation or action does not arrive as `"FORBIDDEN"`. Across a `runQuery` / `runMutation` / `runAction` boundary the message becomes:
+
+```
+Uncaught Error: FORBIDDEN
+    at handler (../convex/media.ts:87:13)
+```
+
+Two consequences, both quiet. Any `if (msg === "AUTH")` dispatch silently stops firing, so an authorization failure gets reported as a generic tool error and the client never re-authenticates. And the raw message — **your file paths and line numbers** — goes straight into the tool result the model reads.
+
+Strip both before you branch on the message or return it:
+
+```ts
+export function cleanError(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  return raw
+    .split("\n")[0]
+    .replace(/^Uncaught\s+\w*Error:\s*/i, "")
+    .replace(/\s+at\s+\S+\s*\(.*$/, "")
+    .trim();
+}
+```
+
+This is distinct from pitfall #10 in [`pitfalls.md`](./pitfalls.md): there the message is *redacted* in production, here it is *decorated*. Both mean the string you threw is not the string you get back.
