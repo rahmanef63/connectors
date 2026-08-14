@@ -9,7 +9,7 @@ Produce one remote MCP server in the target codebase, plus whatever registration
 
 ## Load only what applies
 
-There are 25 Markdown files here. Reading all of them costs tokens you want for the build. Open the folder that matches the goal, then pull single `shared/` files on demand ([`shared/README.md`](./shared/README.md) is that folder's own table). The per-goal orders below are the intended budget.
+There are 27 Markdown files here. Two live in `docs/` and are dated point-in-time reports, not guidance — read them only when working on the shared-code question. Reading all of them costs tokens you want for the build. Open the folder that matches the goal, then pull single `shared/` files on demand ([`shared/README.md`](./shared/README.md) is that folder's own table). The per-goal orders below are the intended budget.
 
 ## File map
 
@@ -18,6 +18,8 @@ There are 25 Markdown files here. Reading all of them costs tokens you want for 
 | `README.md` | human router: thesis, folder decision table, dependency line, license |
 | `AGENTS.md` | this file — agent router |
 | `LICENSE` | MIT, 2026 rahmanef63 |
+| `docs/2026-08-14-spec-baseline.md` | which specs the guidance is written against, and when each was verified |
+| `docs/2026-08-14-ssot-gap-report.md` | point-in-time audit: CareerPack vs this repo, and what a shared code layer would own |
 | `cn-mcp-core/README.md` | the design invariant, the phase decision tree, framework/DB adaptation notes, spec links |
 | `cn-mcp-core/phase-1-bearer.md` | the endpoint: JSON-RPC dispatch, bearer auth, tool registry |
 | `cn-mcp-core/phase-2-oauth.md` | the authorization half: consent page, auth codes, token exchange, discovery documents |
