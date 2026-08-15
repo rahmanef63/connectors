@@ -43,11 +43,11 @@ GPT Builder's **Configure** tab. The worked example ships the whole package as a
 
 ## Worked example
 
-`codex-build-week` (`github.com/rahmanef63/codex-build-week`), a Next.js + Convex app:
+The worked example, a Next.js + Convex app:
 
 | Path | What it is |
 |---|---|
-| `GPTs/temanusaha-actions.yaml` | 234 lines — the schema you paste into GPT Builder |
+| `GPTs/SERVER_NAME-actions.yaml` | 234 lines — the schema you paste into GPT Builder |
 | `GPTs/action-schema.json` | 784 lines — same 6 operations, plus response examples and the consequential flags |
 | `GPTs/alfa.md` | 258 lines — the Configure package and the operationId→route policy table |
 

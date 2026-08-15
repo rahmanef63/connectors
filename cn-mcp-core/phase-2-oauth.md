@@ -42,7 +42,7 @@ Nothing in the transport changes when OAuth lands. The endpoint, the dispatcher 
 
 ## Worked example — deliberately absent
 
-`codex-build-week` does **not** implement OAuth. It has no consent page and no `/.well-known/*` routes: grepping `convex/` for `well-known` and `oauth` returns exactly one hit, and that hit is the comment below. `convex/http.ts:129` mounts the transport with `registerMcpRoutes(http)`; no authorization-server routes are registered anywhere in the file. The phase boundary is stated in the transport header, `convex/mcp/routes.ts:5-6`:
+The worked example does **not** implement OAuth. It has no consent page and no `/.well-known/*` routes: grepping `convex/` for `well-known` and `oauth` returns exactly one hit, and that hit is the comment below. `convex/http.ts:129` mounts the transport with `registerMcpRoutes(http)`; no authorization-server routes are registered anywhere in the file. The phase boundary is stated in the transport header, `convex/mcp/routes.ts:5-6`:
 
 ```ts
 // Registered by convex/http.ts. Phase 1 = bearer only; OAuth 2.1 + PKCE is a

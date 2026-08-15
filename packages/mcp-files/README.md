@@ -7,7 +7,7 @@ This package owns **protocol** concerns only. It never learns what a portfolio, 
 
 ## New project quickstart
 
-Three steps. Nothing CareerPack-specific is involved.
+Three steps. Nothing app-specific is involved.
 
 **1 — declare the tool.** One tool per user goal, not one per storage step.
 
@@ -134,8 +134,8 @@ Vendor that file, and re-run the script to pick up fixes.
  * checksum: e804b6ab73d7 */
 ```
 
-CareerPack consumes it this way today at `convex/mcp/_vendor/mcpFiles.ts`.
-Replace it with the npm dependency once the package is published.
+A Convex consumer vendors it at `convex/mcp/_vendor/mcpFiles.ts` today.
+Replace that copy with the npm dependency once the package is published.
 
 ## Scripts
 

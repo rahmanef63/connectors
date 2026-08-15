@@ -1,13 +1,15 @@
 # SSOT gap report — 2026-08-14
 
-**Scope:** what exists today across `connectors` and CareerPack, measured against the goal of making `connectors` the single source of truth for MCP/Plugin integration, and what must change to get there.
+**Scope:** what exists today across `connectors` and the consumer, measured against the goal of making `connectors` the single source of truth for MCP/Plugin integration, and what must change to get there.
+
+> **Anonymised.** This repo is a cookbook, so the application audited here is called only "the consumer". The findings are what transfer; its name is not.
 **Assumes:** you are deciding whether and how to add a shared code layer. Nothing here has been implemented; this is the audit that precedes it.
 
 ## The premise is inverted
 
-The task brief assumes `connectors` holds working connector code to preserve and refactor, and that CareerPack is a downstream consumer. **It is the other way round.**
+The task brief assumes `connectors` holds working connector code to preserve and refactor, and that the consumer is a downstream consumer. **It is the other way round.**
 
-| | `connectors` | CareerPack |
+| | `connectors` | the consumer |
 |---|---|---|
 | Code | **none** — 25 `.md`, `LICENSE`, `.gitignore` | **5,891 lines** across 33 files under `convex/mcp/` |
 | Published tool names | none | **68**, live |
@@ -15,11 +17,11 @@ The task brief assumes `connectors` holds working connector code to preserve and
 | File subsystem | described | implemented: HMAC-signed, expiring, ownership-bound read URLs |
 | Tests | none | `convex/mcp/jsonrpc.test.ts` |
 
-So there is nothing in `connectors` to protect, and no consumer to break. The "existing code protection" section of the brief applies to **CareerPack**, and extraction runs **CareerPack → connectors**, not the reverse.
+So there is nothing in `connectors` to protect, and no consumer to break. The "existing code protection" section of the brief applies to **the consumer**, and extraction runs **the consumer → connectors**, not the reverse.
 
-CareerPack's HEAD commit is `feat(mcp): attach library images to a portfolio item as its thumbnail` — the exact capability the brief wants to enable. It is closer to the goal than the brief assumes, and blocked by something more specific.
+The consumer's HEAD commit is `feat(mcp): attach library images to a portfolio item as its thumbnail` — the exact capability the brief wants to enable. It is closer to the goal than the brief assumes, and blocked by something more specific.
 
-## What CareerPack already does well
+## What the consumer already does well
 
 Do not rebuild these. They are the extraction candidates.
 
@@ -36,13 +38,13 @@ Do not rebuild these. They are the extraction candidates.
 
 The brief's target: ChatGPT generates an image and puts it on a portfolio item without orchestrating storage internals.
 
-CareerPack's `portfolio_set_media` description says, verbatim:
+The consumer's `portfolio_set_media` description says, verbatim:
 
 > "upload with `files_upload_url` + `files_register` first, then pass those `file_ids` here."
 
 That is the exact choreography the brief names as undesirable. But the deeper problem is that **it cannot be executed by a model at all**: `files_upload_url` mints a signed URL expecting an HTTP `PUT` of bytes, and a language model has no way to perform that upload. The middle step is not merely awkward — it is unreachable. Any host would stall between `files_upload_url` and `files_register`.
 
-**No `openai/fileParams` appears anywhere in CareerPack.** A repo-wide grep for `fileParams`, `download_url` and `file_id`-as-file-input returns only CareerPack's *own* `file_id` (a Convex document id from `files_list`, a different thing entirely wearing the same name). That name collision will confuse a model and should be resolved deliberately, not by accident.
+**No `openai/fileParams` appears anywhere in the consumer.** A repo-wide grep for `fileParams`, `download_url` and `file_id`-as-file-input returns only the consumer's *own* `file_id` (a Convex document id from `files_list`, a different thing entirely wearing the same name). That name collision will confuse a model and should be resolved deliberately, not by accident.
 
 **This is the one gap that blocks the stated acceptance test.** Everything else below is quality.
 
@@ -56,11 +58,11 @@ This is precisely the brief's warning — *"do not merely authenticate the MCP c
 
 The brief asks for dot-notation (`portfolio.attach_media`) and *also* says: *"If the repository's current naming convention has already been published, do not rename tools casually."*
 
-CareerPack has **68 published `snake_case` domain-prefixed names**. Renaming them all to dot-notation would break every existing consumer for aesthetics. **Recommendation: keep `snake_case`.** It already satisfies the real requirement — domain-prefixed, action-oriented, narrow enough to allow-list individually. Any shared package must not hardcode a separator.
+The consumer has **68 published `snake_case` domain-prefixed names**. Renaming them all to dot-notation would break every existing consumer for aesthetics. **Recommendation: keep `snake_case`.** It already satisfies the real requirement — domain-prefixed, action-oriented, narrow enough to allow-list individually. Any shared package must not hardcode a separator.
 
 ### 4. `_meta`, `structuredContent`, and output schemas are unused
 
-CareerPack returns handler values through a single text-content path. No tool declares an output schema, and `structuredContent` is not used. This is a real gap against the current spec, but it is a **compatibility-affecting change** to 68 published contracts and should be staged, not swept.
+The consumer returns handler values through a single text-content path. No tool declares an output schema, and `structuredContent` is not used. This is a real gap against the current spec, but it is a **compatibility-affecting change** to 68 published contracts and should be staged, not swept.
 
 ### 5. No contract snapshot, no golden prompts
 
@@ -74,13 +76,13 @@ CareerPack returns handler values through a single text-content path. No tool de
 
 Extraction targets, in dependency order:
 
-1. **File ingestion** — the `OpenAIFile` schema builders, an SSRF-safe fetch policy, normalized bytes + metadata, and the `FileStoreAdapter` / `MediaAttachAdapter` seams. This is the only item that unblocks the acceptance test, and CareerPack has no existing implementation to preserve, so it is also the lowest-risk thing to build first.
-2. **Tool contract types + annotation validation** — CareerPack's `ToolDef` is already close; lift it, do not redesign it.
+1. **File ingestion** — the `OpenAIFile` schema builders, an SSRF-safe fetch policy, normalized bytes + metadata, and the `FileStoreAdapter` / `MediaAttachAdapter` seams. This is the only item that unblocks the acceptance test, and the consumer has no existing implementation to preserve, so it is also the lowest-risk thing to build first.
+2. **Tool contract types + annotation validation** — the consumer's `ToolDef` is already close; lift it, do not redesign it.
 3. **Contract snapshot + golden-prompt harness** — pure test infrastructure, zero runtime risk.
-4. **Scope declaration and per-call enforcement** — needs a CareerPack migration plan because it changes behaviour.
-5. **OAuth resource-server helpers** — CareerPack's is working; extract only once a second consumer exists to prove the shape.
+4. **Scope declaration and per-call enforcement** — needs a the consumer migration plan because it changes behaviour.
+5. **OAuth resource-server helpers** — the consumer's is working; extract only once a second consumer exists to prove the shape.
 
-Must **not** move into the shared layer: portfolio/CV/application/financial semantics, CareerPack's storage rules, its `users` table identity, or anything that assumes Convex.
+Must **not** move into the shared layer: portfolio/CV/application/financial semantics, the consumer's storage rules, its `users` table identity, or anything that assumes Convex.
 
 ## The decision this report cannot make
 
@@ -95,4 +97,4 @@ This is a product decision about what `connectors` *is*, not a technical one, an
 
 ## Recommended first slice, once that is settled
 
-Build **only** the file-ingestion primitive, with tests, and wire exactly one CareerPack tool to it. That proves the seam end to end against the brief's own acceptance test, touches no published contract, and leaves the other 67 tools untouched. Everything else in the brief is real work that follows from a foundation that has been demonstrated rather than assumed.
+Build **only** the file-ingestion primitive, with tests, and wire exactly one the consumer tool to it. That proves the seam end to end against the brief's own acceptance test, touches no published contract, and leaves the other 67 tools untouched. Everything else in the brief is real work that follows from a foundation that has been demonstrated rather than assumed.

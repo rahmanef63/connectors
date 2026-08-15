@@ -21,7 +21,7 @@ Typical layout (Next.js shape — adapt freely; the endpoint is just `POST(json)
 
 ## Worked example
 
-`github.com/rahmanef63/codex-build-week` (Next.js + Convex, "TemanUsaha AI") ships exactly this phase — bearer only, 11 tools, no OAuth.
+The worked example (Next.js + Convex) ships exactly this phase — bearer only, 11 tools, no OAuth.
 
 | File | Shows |
 |---|---|

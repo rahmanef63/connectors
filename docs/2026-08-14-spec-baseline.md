@@ -35,4 +35,4 @@ Both yield to a real browser. What worked: Playwright + Chromium, a fresh browse
 
 ## Protocol version in use
 
-`2024-11-05` is what ChatGPT, Claude and Cursor all still negotiate, and it is what CareerPack pins. The spec revision above is newer; bumping the pin is not cosmetic, because later revisions change error and content shapes. Any shared package must let the consumer choose, and must not silently advertise a revision the server does not actually implement.
+`2024-11-05` is what ChatGPT, Claude and Cursor all still negotiate, and it is what the consumer pins. The spec revision above is newer; bumping the pin is not cosmetic, because later revisions change error and content shapes. Any shared package must let the consumer choose, and must not silently advertise a revision the server does not actually implement.

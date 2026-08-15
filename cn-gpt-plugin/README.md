@@ -39,4 +39,4 @@ OpenAI renamed the feature to **Plugins**. `https://developers.openai.com/apps-s
 
 ## Worked example
 
-`codex-build-week` (TemanUsaha AI, Next.js + Convex) is cited throughout both files as a real server at Phase 1 — bearer only, its own source says so — and therefore as a real example of a server that **cannot** be registered in ChatGPT today without work. Its separate Custom GPT Actions surface under `GPTs/` is a different mechanism and is not covered here.
+The worked example (Next.js + Convex) is cited throughout both files as a real server at Phase 1 — bearer only, its own source says so — and therefore as a real example of a server that **cannot** be registered in ChatGPT today without work. Its separate Custom GPT Actions surface under `GPTs/` is a different mechanism and is not covered here.

@@ -103,10 +103,10 @@ If the plugin root has `package.json` **plus** `bun.lock`/`bun.lockb` or `npm-sh
 
 ## Worked example — codex, if it shipped a plugin
 
-`codex-build-week` has no plugin today (grep for `.claude-plugin|marketplace.json|CLAUDE_PLUGIN_ROOT`: zero hits). One would be net-new, and would be *only* this `.mcp.json` at the plugin root:
+The worked example has no plugin today (grep for `.claude-plugin|marketplace.json|CLAUDE_PLUGIN_ROOT`: zero hits). One would be net-new, and would be *only* this `.mcp.json` at the plugin root:
 
 ```json
-{ "mcpServers": { "temanusaha": {
+{ "mcpServers": { "SERVER_NAME": {
   "type": "http",
   "url": "https://<deployment>.convex.site/mcp",
   "headers": { "Authorization": "Bearer <MCP_API_KEY>", "X-Action-API-Key": "<agent token>" }

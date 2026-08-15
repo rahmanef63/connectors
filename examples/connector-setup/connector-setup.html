@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Connector setup — copy-paste card</title>
+<!--
+  Standalone, dependency-free version of ConnectorSetup.tsx.
+  Open it in a browser; there is nothing to build and nothing to install.
+
+  To adapt: edit CONFIG below, or type into the panel at the top of the page —
+  every string on the page derives from those four values. In a real app they
+  come from the environment, not from source: see .env.example next to this
+  file for the variable names ConnectorSetup.tsx reads.
+
+  To embed: copy the style block, the app container div, and the script block.
+  The CSS is scoped under .cs and reads --foreground/--card/--border/--primary
+  from the host page when they exist, so it inherits an existing design system.
+  (Tag names are spelled out on purpose: naming them literally here makes any
+  extract-the-first-tag script grab this comment instead of the real block.)
+-->
+<style>
+:root { color-scheme: light dark; }
+body { margin: 0; padding: 2rem 1.25rem 4rem; background: var(--page, #f7f8fa); }
+@media (prefers-color-scheme: dark) { body { background: var(--page, #0f1115); } }
+.wrap { max-width: 62rem; margin: 0 auto; }
+
+.cs {
+  --cs-fg: var(--foreground, #14161b);
+  --cs-muted: var(--muted-foreground, #6a7080);
+  --cs-bg: var(--card, #ffffff);
+  --cs-sunk: var(--muted, #f3f4f7);
+  --cs-line: var(--border, #e4e7ec);
+  --cs-accent: var(--primary, #2b56d4);
+  --cs-warn: #a35c00;
+  --cs-ok: #16794a;
+  color: var(--cs-fg);
+  font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  .cs {
+    --cs-fg: var(--foreground, #e8eaf0);
+    --cs-muted: var(--muted-foreground, #939aa8);
+    --cs-bg: var(--card, #171a20);
+    --cs-sunk: var(--muted, #1f232b);
+    --cs-line: var(--border, #2a2f38);
+    --cs-accent: var(--primary, #7f9cff);
+    --cs-warn: #e0a340;
+    --cs-ok: #4cc38a;
+  }
+}
+.cs *, .cfg * { box-sizing: border-box; }
+
+.cfg { border: 1px dashed var(--cs-line, #e3e5e9); border-radius: 10px; padding: .85rem 1rem; margin-bottom: 1.75rem; display: grid; gap: .7rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); align-items: end; font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; color: var(--cs-fg, #16181d); }
+.cfg label { display: block; font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--cs-muted, #6b7280); margin-bottom: .25rem; }
+.cfg input[type=text] { width: 100%; padding: .4rem .55rem; border: 1px solid var(--cs-line, #e3e5e9); border-radius: 6px; background: var(--cs-bg, #fff); color: inherit; font: .82rem ui-monospace, Menlo, monospace; }
+.cfg .row-check { display: flex; align-items: center; gap: .4rem; }
+.cfg .row-check label { margin: 0; text-transform: none; letter-spacing: 0; font-size: .82rem; }
+.cfg .cfg-hint { grid-column: 1 / -1; margin: 0; font-size: .78rem; color: var(--cs-muted, #6b7280); }
+
+.cs-head { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: flex-start; margin-bottom: 1.25rem; }
+.cs-title { font-size: 1.1rem; font-weight: 650; margin: 0; }
+.cs-sub { margin: .25rem 0 0; color: var(--cs-muted); max-width: 46ch; }
+.cs-endpoint { min-width: min(100%, 22rem); flex: 1; }
+.cs-endpoint-label { display: block; font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--cs-muted); margin-bottom: .3rem; }
+.cs-tabs { display: flex; flex-wrap: wrap; gap: .25rem; border-bottom: 1px solid var(--cs-line); margin-bottom: 1rem; }
+.cs-tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; padding: .5rem .75rem; margin-bottom: -1px; font: inherit; color: var(--cs-muted); cursor: pointer; border-radius: 6px 6px 0 0; }
+.cs-tab:hover { color: var(--cs-fg); }
+.cs-tab.is-on { color: var(--cs-fg); border-bottom-color: var(--cs-accent); font-weight: 600; }
+.cs-tab:focus-visible { outline: 2px solid var(--cs-accent); outline-offset: 2px; }
+.cs-where { margin: 0 0 .5rem; font-size: .82rem; color: var(--cs-muted); }
+.cs-where-k { display: inline-block; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--cs-muted); border: 1px solid var(--cs-line); border-radius: 4px; padding: 0 .35rem; margin-right: .45rem; }
+.cs-lede { margin: 0 0 1.25rem; max-width: 68ch; }
+.cs-group { margin-bottom: 1.5rem; }
+.cs-group-title { font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; color: var(--cs-muted); margin: 0 0 .5rem; font-weight: 600; }
+.cs-group-note { margin: 0 0 .75rem; color: var(--cs-muted); max-width: 68ch; font-size: .88rem; }
+.cs-row { border: 1px solid var(--cs-line); border-left-width: 3px; border-radius: 8px; padding: .6rem .7rem; margin-bottom: .5rem; background: var(--cs-bg); }
+.cs-row-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.cs-field { font: 600 .85rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cs-badge { font-size: .66rem; letter-spacing: .05em; text-transform: uppercase; padding: .1rem .4rem; border-radius: 999px; border: 1px solid currentColor; opacity: .9; cursor: help; }
+.cs-v-paste { border-left-color: var(--cs-accent); }
+.cs-v-paste .cs-badge { color: var(--cs-accent); }
+.cs-v-pick, .cs-v-tick { border-left-color: var(--cs-warn); }
+.cs-v-pick .cs-badge, .cs-v-tick .cs-badge { color: var(--cs-warn); }
+.cs-v-auto { border-left-color: var(--cs-ok); }
+.cs-v-auto .cs-badge { color: var(--cs-ok); }
+.cs-v-skip { border-left-color: var(--cs-line); opacity: .72; }
+.cs-v-skip .cs-badge { color: var(--cs-muted); }
+.cs-note { margin: .45rem 0 0; font-size: .82rem; color: var(--cs-muted); max-width: 72ch; }
+.cs-missing { margin: .45rem 0 0; font-size: .82rem; color: var(--cs-warn); }
+.cs-copy { display: flex; align-items: stretch; gap: .4rem; margin-top: .45rem; }
+.cs-val { flex: 1; min-width: 0; margin: 0; padding: .45rem .55rem; background: var(--cs-sunk); border-radius: 6px; font: .78rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cs-btn { flex-shrink: 0; align-self: flex-start; appearance: none; border: 1px solid var(--cs-line); background: var(--cs-bg); color: var(--cs-fg); border-radius: 6px; padding: .4rem .6rem; font: 500 .75rem/1 inherit; cursor: pointer; white-space: nowrap; }
+.cs-btn:hover { border-color: var(--cs-accent); color: var(--cs-accent); }
+.cs-btn:focus-visible { outline: 2px solid var(--cs-accent); outline-offset: 2px; }
+.cs-traps { border: 1px solid var(--cs-line); border-radius: 8px; padding: .8rem .9rem; background: var(--cs-sunk); }
+.cs-traps ul { margin: 0; padding-left: 1.1rem; }
+.cs-traps li { margin-bottom: .4rem; max-width: 74ch; }
+.cs-traps li:last-child { margin-bottom: 0; }
+.cs-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cs-legend { display: flex; flex-wrap: wrap; gap: .35rem 1.1rem; margin: 0 0 1rem; padding: .55rem .75rem; border: 1px solid var(--cs-line); border-radius: 8px; font-size: .78rem; color: var(--cs-muted); }
+.cs-legend b { font: 600 .66rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; margin-right: .35rem; }
+.cs-k-paste { color: var(--cs-accent); } .cs-k-attn { color: var(--cs-warn); } .cs-k-ok { color: var(--cs-ok); } .cs-k-skip { color: var(--cs-muted); }
+.cs-count { margin: -.5rem 0 1.25rem; font-size: .84rem; color: var(--cs-muted); }
+.cs-count strong { color: var(--cs-accent); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .cs * { transition: none !important; animation: none !important; } }
+@media (max-width: 34rem) { .cs-copy { flex-direction: column; } .cs-btn { align-self: stretch; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- Demo-only. Delete this block when embedding; keep CONFIG in the script. -->
+<form class="cfg" id="cfg" onsubmit="return false">
+  <div><label for="f-name">Name</label><input type="text" id="f-name" value="Your app" /></div>
+  <div><label for="f-origin">Origin</label><input type="text" id="f-origin" value="https://mcp.example.com" /></div>
+  <div><label for="f-scopes">Scopes</label><input type="text" id="f-scopes" value="mcp.read mcp.write" /></div>
+  <div class="row-check"><input type="checkbox" id="f-dcr" checked /><label for="f-dcr">Server supports dynamic client registration</label></div>
+  <p class="cfg-hint">Demo panel — edit and every string below re-derives. In your app these four values come from your config, not a form.</p>
+</form>
+
+<div id="app"></div>
+</div>
+
+<script>
+/* ── config ─────────────────────────────────────────────────────────── */
+var CONFIG = {
+  name: "Your app",
+  origin: "https://mcp.example.com",
+  scopes: ["mcp.read", "mcp.write"],
+  dcr: true,
+  description: "",
+  mcpPath: "/mcp",
+  clientId: "",
+  clientSecret: "",
+  token: null,
+  oidc: false
+};
+
+function resolveConnector(c) {
+  var origin = c.origin.replace(/\/+$/, "");
+  var server = origin + (c.mcpPath || "/mcp");
+  return {
+    name: c.name, description: c.description, scopes: c.scopes, dcr: c.dcr,
+    clientId: c.clientId, clientSecret: c.clientSecret, oidc: c.oidc,
+    origin: origin, server: server,
+    slug: c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "server",
+    authorize: origin + "/oauth/authorize",
+    token: origin + "/oauth/token",
+    register: c.dcr ? origin + "/oauth/register" : "",
+    asBase: origin,                                  // RFC 9728 authorization_servers[0]
+    resource: server,                                // RFC 8707 — the endpoint, not the origin
+    protectedResource: origin + "/.well-known/oauth-protected-resource",
+    bearer: c.token || null
+  };
+}
+
+var VERDICT = {
+  paste: { label: "paste", hint: "Copy this value into the field" },
+  pick:  { label: "pick",  hint: "Choose this option" },
+  tick:  { label: "tick",  hint: "Check this box" },
+  auto:  { label: "auto",  hint: "Filled in for you — only paste if you find it empty" },
+  skip:  { label: "leave blank", hint: "Do not fill this in" }
+};
+
+/* ── guides ─────────────────────────────────────────────────────────── */
+function guides(c) {
+  var reg = c.dcr
+    ? [{ field: "Registration method", verdict: "pick", value: "Dynamic Client Registration (DCR)",
+         note: "This server supports DCR, so no client id is needed. If the option reads “(Unavailable)”, ChatGPT could not discover the Registration URL — paste it below, close the modal, and reopen it." }]
+    : [{ field: "Registration method", verdict: "pick", value: "User-Defined OAuth Client",
+         note: "DCR and CIMD will read “(Unavailable)” — this server does not offer them." },
+       { field: "Client ID", verdict: "paste", value: c.clientId,
+         note: c.clientId ? "" : "Create a client first — no id configured." }]
+      .concat(c.clientSecret ? [{ field: "Client Secret", verdict: "paste", value: c.clientSecret }] : []);
+
+  var oidcRows = c.oidc
+    ? [{ field: "OIDC enabled", verdict: "tick" },
+       { field: "OIDC configuration URL", verdict: "auto", value: c.origin + "/.well-known/openid-configuration" },
+       { field: "OIDC userinfo endpoint", verdict: "auto" },
+       { field: "OIDC scopes supported", verdict: "auto" }]
+    : [{ field: "OIDC enabled", verdict: "skip" },
+       { field: "OIDC configuration URL", verdict: "skip" },
+       { field: "OIDC userinfo endpoint", verdict: "skip" },
+       { field: "OIDC scopes supported", verdict: "skip" }];
+
+  var tok = c.bearer || "MCP_TOKEN";
+
+  return [
+    { id: "chatgpt", host: "ChatGPT",
+      path: "Settings → Apps → Advanced settings → Developer mode, then Plugins → +",
+      lede: "Paste the Server URL and ChatGPT discovers everything else from your .well-known documents. The advanced panel is a fallback for when that discovery fails — an empty field there is the only reason to touch it.",
+      groups: [
+        { title: "1 · The two fields you actually fill", rows: [
+          { field: "Name", verdict: "paste", value: c.name },
+          { field: "Connection", verdict: "pick", value: "Server URL", note: "Not “Tunnel” — that is for a server running on your own machine." },
+          { field: "Server URL", verdict: "paste", value: c.server, note: "The /mcp path is required and is not inferred from the origin." },
+          { field: "Authentication", verdict: "pick", value: "OAuth" }
+        ]},
+        { title: "2 · Advanced OAuth settings → Client registration",
+          note: "Open the “Advanced OAuth settings” panel. Everything from here down is pre-filled unless discovery failed.",
+          rows: reg },
+        { title: "3 · Scopes", rows: [
+          { field: "Default scopes", verdict: "paste", value: c.scopes.join("\n"), note: "One per line. Requested when an action does not declare its own scope tags." },
+          { field: "Base scopes", verdict: "skip", note: "Requested on top of the default scopes on every auth request. This server has no scope that needs to be present unconditionally." }
+        ]},
+        { title: "4 · OAuth endpoints",
+          note: "Discovered from the server. Compare them against these — if one is blank, paste it; if one differs, your discovery document is wrong, and fixing it there beats patching it here.",
+          rows: [
+            { field: "Auth URL", verdict: "auto", value: c.authorize },
+            { field: "Token URL", verdict: "auto", value: c.token },
+            c.dcr ? { field: "Registration URL", verdict: "auto", value: c.register }
+                  : { field: "Registration URL", verdict: "skip", note: "No DCR on this server; a client id is used instead." },
+            { field: "Authorization server base", verdict: "auto", value: c.asBase },
+            { field: "Resource", verdict: "auto", value: c.resource, note: "The MCP endpoint itself, not the origin." }
+          ]},
+        { title: "5 · OpenID support",
+          note: c.oidc ? "This server advertises an OIDC configuration URL."
+                       : "All four controls stay untouched. “OIDC enabled” is greyed out because this server advertises no OIDC configuration URL — that is expected, and MCP does not need one. OIDC only lets ChatGPT read your email for domain claiming.",
+          rows: oidcRows },
+        { title: "6 · Finish", rows: [
+          { field: "Icon (optional)", verdict: "skip", note: "PNG only, 256×256 or larger, 10 KB max. Purely cosmetic." },
+          { field: "I understand and want to continue", verdict: "tick", note: "Create stays disabled until this is checked." },
+          { field: "Create", verdict: "pick", note: "Then run Scan Tools. The app lands in Drafts." }
+        ]}
+      ],
+      traps: [
+        "Developer mode is web only, and the setting has moved — if Settings → Apps has no Advanced settings, look under Settings → Security and login.",
+        "Scan Tools failing with every tool missing usually means the descriptor is malformed, not that auth is wrong. A 401 at this stage is normal and expected."
+      ]},
+
+    { id: "claude-ai", host: "claude.ai",
+      path: "Settings → Connectors → Add custom connector",
+      lede: "Two fields. The advanced pair stays empty unless this server has no dynamic registration.",
+      groups: [
+        { title: "1 · The form", rows: [
+          { field: "Name", verdict: "paste", value: c.name, note: "Shown in the connectors list." },
+          { field: "Remote MCP server URL", verdict: "paste", value: c.server, note: "Must be HTTPS and must include the path the server answers on." }
+        ]},
+        { title: "2 · Advanced settings", rows: c.dcr
+          ? [{ field: "OAuth Client ID (optional)", verdict: "skip", note: "This server registers clients dynamically — leave it empty and Claude handles it." },
+             { field: "OAuth Client Secret (optional)", verdict: "skip" }]
+          : [{ field: "OAuth Client ID (optional)", verdict: "paste", value: c.clientId },
+             { field: "OAuth Client Secret (optional)", verdict: c.clientSecret ? "paste" : "skip", value: c.clientSecret }] },
+        { title: "3 · Finish", rows: [{ field: "Add", verdict: "pick", note: "Then approve the OAuth prompt." }] }
+      ],
+      traps: [
+        "A connector cannot be edited after it is added — you have to remove it and add it again, so a typo in the URL costs a full re-entry.",
+        "Claude dials out from Anthropic's cloud, not from your machine. localhost and any private address will never connect, on web, desktop or mobile."
+      ]},
+
+    { id: "claude-code", host: "Claude Code",
+      path: "your terminal, or .mcp.json at the repo root",
+      lede: "The only host here with a real credential field, so this one takes a bearer directly.",
+      groups: [
+        { title: "Option A · one command", rows: [
+          { field: "terminal", verdict: "paste",
+            value: 'claude mcp add --transport http ' + c.slug + ' ' + c.server + ' \\\n  --header "Authorization: Bearer ' + tok + '"',
+            note: "Adding does not validate anything. Run /mcp afterwards; a bad token shows as failed." }
+        ]},
+        { title: "Option B · committed to the repo",
+          note: "Keeps the token out of git — ${MCP_TOKEN} is expanded from the environment at load time.",
+          rows: [
+            { field: ".mcp.json", verdict: "paste",
+              value: JSON.stringify({ mcpServers: (function(){ var o={}; o[c.slug]={ type:"http", url:c.server, headers:{ Authorization:"Bearer ${MCP_TOKEN}" } }; return o; })() }, null, 2),
+              note: '"type" is mandatory. A url without it is a config error and the server is skipped silently.' }
+          ]}
+      ],
+      traps: [
+        "An unset ${MCP_TOKEN} does not fail the load — Claude Code sends the literal text and your server answers 401.",
+        "Do not name the server workspace, computer-use or claude-in-chrome; those are reserved and skipped without a message."
+      ]},
+
+    { id: "cursor", host: "Cursor",
+      path: ".cursor/mcp.json in the project, or ~/.cursor/mcp.json globally",
+      lede: "Looks identical to Claude Code's file and is not interchangeable with it.",
+      groups: [
+        { title: "The file", rows: [
+          { field: ".cursor/mcp.json", verdict: "paste",
+            value: JSON.stringify({ mcpServers: (function(){ var o={}; o[c.slug]={ url:c.server, headers:{ Authorization:"Bearer ${env:MCP_TOKEN}" } }; return o; })() }, null, 2) }
+        ]}
+      ],
+      traps: [
+        'No "type" key here — Cursor\'s remote shape omits it, while Claude Code errors without it.',
+        "The interpolation syntax is ${env:NAME}. Paste Claude Code's ${MCP_TOKEN} into this file and Cursor sends it as literal text."
+      ]},
+
+    { id: "verify", host: "Verify",
+      path: "any terminal",
+      lede: "Run this before blaming a host. It proves DNS, TLS, routing and the auth gate in one call.",
+      groups: [
+        { title: "Is the endpoint alive?", rows: [
+          { field: "curl", verdict: "paste",
+            value: 'curl -sS -i -X POST ' + c.server + ' \\\n  -H "Content-Type: application/json" \\\n  -d \'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}\'',
+            note: "A 401 with a WWW-Authenticate header is a PASS: the server is up and the auth gate works. You are ruling out 404 and a timeout." }
+        ]},
+        { title: "Does discovery work?",
+          note: "If ChatGPT's advanced fields come up blank, this is the document that failed.",
+          rows: [{ field: "curl", verdict: "paste", value: "curl -sS " + c.protectedResource }] }
+      ]}
+  ];
+}
+
+/* ── render ─────────────────────────────────────────────────────────── */
+var active = "chatgpt";
+var app = document.getElementById("app");
+
+function esc(s) { return String(s).replace(/[&<>"]/g, function (m) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[m]; }); }
+
+function copyRow(value, what) {
+  return '<div class="cs-copy"><pre class="cs-val">' + esc(value.trim()) + '</pre>' +
+    '<button type="button" class="cs-btn" data-copy title="Copy ' + esc(what) + '" aria-label="Copy ' + esc(what) + '">copy</button></div>';
+}
+
+function countLine(g) {
+  // Summary before detail: the honest headline is that most of what the host
+  // form shows is not the user's problem.
+  var rows = g.groups.reduce(function (a, x) { return a.concat(x.rows); }, []);
+  var mine = rows.filter(function (r) { return r.verdict !== "auto" && r.verdict !== "skip"; }).length;
+  var rest = rows.length - mine;
+  return '<p class="cs-count"><strong>' + mine + '</strong> of ' + rows.length + ' fields need you' +
+    (rest > 0 ? ' — the other ' + rest + ' are discovered or left alone' : '') + '.</p>';
+}
+
+function render() {
+  var c = resolveConnector(CONFIG);
+  var gs = guides(c);
+  var g = gs.filter(function (x) { return x.id === active; })[0] || gs[0];
+
+  var html = '<section class="cs" aria-label="Connect ' + esc(c.name) + '">' +
+    '<header class="cs-head"><div>' +
+      '<h2 class="cs-title">Connect ' + esc(c.name) + '</h2>' +
+      '<p class="cs-sub">One server, ' + gs.length + ' ways in. The endpoint never changes — only the string each client wants.</p>' +
+    '</div><div class="cs-endpoint"><span class="cs-endpoint-label">MCP endpoint</span>' + copyRow(c.server, "MCP endpoint") + '</div></header>' +
+    '<div class="cs-legend">' +
+      '<span><b class="cs-k-paste">paste</b>copy it in</span>' +
+      '<span><b class="cs-k-attn">pick / tick</b>choose or check</span>' +
+      '<span><b class="cs-k-ok">auto</b>already filled; paste only if blank</span>' +
+      '<span><b class="cs-k-skip">leave blank</b>do not touch</span>' +
+    '</div>' +
+    '<div class="cs-tabs" role="tablist" aria-label="Client">';
+
+  gs.forEach(function (x) {
+    html += '<button role="tab" type="button" aria-selected="' + (x.id === active) + '" class="cs-tab' + (x.id === active ? " is-on" : "") + '" data-tab="' + x.id + '">' + esc(x.host) + '</button>';
+  });
+  html += '</div><div role="tabpanel" class="cs-panel">' +
+    '<p class="cs-where"><span class="cs-where-k">Where</span> ' + esc(g.path) + '</p>' +
+    '<p class="cs-lede">' + esc(g.lede) + '</p>' + countLine(g);
+
+  g.groups.forEach(function (grp) {
+    html += '<div class="cs-group"><h3 class="cs-group-title">' + esc(grp.title) + '</h3>';
+    if (grp.note) html += '<p class="cs-group-note">' + esc(grp.note) + '</p>';
+    grp.rows.forEach(function (row) {
+      html += '<div class="cs-row cs-v-' + row.verdict + '"><div class="cs-row-head">' +
+        '<code class="cs-field">' + esc(row.field) + '</code>' +
+        '<span class="cs-badge" title="' + esc(VERDICT[row.verdict].hint) + '">' + VERDICT[row.verdict].label + '</span></div>';
+      if (row.value) html += copyRow(row.value, g.host + " " + row.field);
+      else if (row.value === "") html += '<p class="cs-missing">Not configured — set it in CONFIG.</p>';
+      if (row.note) html += '<p class="cs-note">' + esc(row.note) + '</p>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+
+  if (g.traps && g.traps.length) {
+    html += '<div class="cs-traps"><h3 class="cs-group-title">Before you hit save</h3><ul>';
+    g.traps.forEach(function (t) { html += '<li>' + esc(t) + '</li>'; });
+    html += '</ul></div>';
+  }
+  html += '</div><span class="cs-sr" role="status" aria-live="polite" id="cs-say"></span></section>';
+  app.innerHTML = html;
+}
+
+/* One delegated listener for the whole card: no per-button state to leak. */
+app.addEventListener("click", function (ev) {
+  var tab = ev.target.closest("[data-tab]");
+  if (tab) { active = tab.getAttribute("data-tab"); render(); return; }
+
+  var btn = ev.target.closest("[data-copy]");
+  if (!btn) return;
+  var pre = btn.parentNode.querySelector(".cs-val");
+  // Trim on write: a trailing newline is the documented cause of the
+  // "leading or trailing whitespace" failures hosts either warn about
+  // without fixing, or fail on silently.
+  var text = pre.textContent.trim();
+  var say = document.getElementById("cs-say");
+
+  function done(label, msg) {
+    btn.textContent = label;
+    if (say) say.textContent = msg;
+    clearTimeout(btn._t);
+    btn._t = setTimeout(function () { btn.textContent = "copy"; if (say) say.textContent = ""; }, 1600);
+  }
+  function manual() {
+    // Select it so it stays one Ctrl+C away. A dead button is worse.
+    var r = document.createRange(); r.selectNodeContents(pre);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    done("select + ⌘C", "selected, press control C");
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function () { done("copied", "copied"); }, manual);
+  } else { manual(); }
+});
+
+/* Demo panel only. */
+var cfg = document.getElementById("cfg");
+if (cfg) {
+  cfg.addEventListener("input", function () {
+    CONFIG.name = document.getElementById("f-name").value || "Your app";
+    CONFIG.origin = document.getElementById("f-origin").value || "https://example.com";
+    CONFIG.scopes = document.getElementById("f-scopes").value.split(/[\s,]+/).filter(Boolean);
+    CONFIG.dcr = document.getElementById("f-dcr").checked;
+    render();
+  });
+}
+
+render();
+</script>
+</body>
+</html>

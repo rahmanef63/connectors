@@ -82,7 +82,7 @@ Eleven cross-cutting files, read alongside whichever folder you picked — tool 
 
 ## Reference implementation
 
-[`github.com/rahmanef63/codex-build-week`](https://github.com/rahmanef63/codex-build-week) — a Next.js + Convex app (TemanUsaha AI). It is cited throughout with real file paths and real snippets, so every claim here can be checked against running code.
+Every concrete snippet in this repo comes from a real Next.js + Convex deployment, referred to throughout as **the worked example**. It is deliberately never named: this is a cookbook, and a recipe that only works for one restaurant is not a recipe. Its paths and snippets are quoted verbatim, so every claim here came out of running code rather than a template.
 
 Read it honestly: it is at **Phase 1, bearer only**. Its `convex/mcp/routes.ts` says so in a header comment — *"Phase 1 = bearer only; OAuth 2.1 + PKCE is a separate, later phase"*. That makes it a working example of two things at once: a server Claude Code and Cursor can call today, and a server the ChatGPT and claude.ai connector forms will not accept, because those forms have no API-key field. It also ships a separate Custom GPT Actions surface under `GPTs/` — a different mechanism, covered in `cn-gpts/`.
 

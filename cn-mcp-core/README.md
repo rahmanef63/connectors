@@ -3,7 +3,7 @@
 **Scope:** building the one remote MCP endpoint every AI host connects to — transport, auth, tools, OAuth, admin UI.
 **Assumes:** a deployed web app on HTTPS with some notion of a signed-in user. Nothing else; no host chosen yet.
 
-**Worked example:** `github.com/rahmanef63/codex-build-week` (Next.js + Convex) implements this at **Phase 1 only** — bearer, no OAuth; each phase file cites its real files.
+**Worked example:** a Next.js + Convex deployment implements this at **Phase 1 only** — bearer, no OAuth; each phase file cites its real files.
 
 You build **one** remote MCP endpoint. ChatGPT, Claude.ai, Cursor and the rest all speak the same protocol to it. Nobody ships a per-vendor server — Notion, Stripe, Linear and GitHub each expose a single hosted endpoint and let every host connect. Vendor differences live in **how a client registers**, never in your server.
 

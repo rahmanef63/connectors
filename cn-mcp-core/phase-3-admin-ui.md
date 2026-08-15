@@ -9,7 +9,7 @@
 
 ## Worked example
 
-`slices/real-dashboard/components/agent-setup.tsx` in `codex-build-week` is item 1 plus half of item 2: one card, tabbed copy-to-clipboard fields (client name, description, instructions, starters, settings, generated OpenAPI schema), and a mint button calling `api.agent.issue`. The raw token renders once in-page; afterwards only `tokenPrefix`, `createdAt` and `expiresAt` are readable (`convex/agent.ts:11`), because `issue` stores `sha256(token)` (`convex/agent.ts:6,10`).
+`slices/real-dashboard/components/agent-setup.tsx` in the worked example is item 1 plus half of item 2: one card, tabbed copy-to-clipboard fields (client name, description, instructions, starters, settings, generated OpenAPI schema), and a mint button calling `api.agent.issue`. The raw token renders once in-page; afterwards only `tokenPrefix`, `createdAt` and `expiresAt` are readable (`convex/agent.ts:11`), because `issue` stores `sha256(token)` (`convex/agent.ts:6,10`).
 
 Where it falls short of item 2: no tokens table and no Revoke button. `issue` silently revokes every prior live token for the workspace, so exactly one exists at a time — workable for one client, not once a user connects several.
 

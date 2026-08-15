@@ -37,7 +37,40 @@ Enable it first, and show both paths because the docs disagree: **Settings → S
 https://MCP_ORIGIN/mcp
 ```
 
-The `/mcp` path is required, not inferred: "enter the MCP server URL, including the `/mcp` path" ([connect-chatgpt](https://developers.openai.com/plugins/deploy/connect-chatgpt.md)). Then **Scan Tools**, then **Create**; the app lands in **Drafts**. `TODO: verify` — this modal's OAuth input labels. Nothing fetched names them, and the `Client ID`/`Token URL` labels in [`./clients.md`](./clients.md) come from the GPT Actions editor, a different surface.
+The `/mcp` path is required, not inferred: "enter the MCP server URL, including the `/mcp` path" ([connect-chatgpt](https://developers.openai.com/plugins/deploy/connect-chatgpt.md)). Then **Scan Tools**, then **Create**; the app lands in **Drafts**.
+
+#### The modal's actual fields
+
+Transcribed from the **New Plugin** modal, 2026-08-15. This supersedes the `Client ID`/`Token URL` labels in [`./clients.md`](./clients.md), which come from the GPT Actions editor — a different surface with different names.
+
+| Field | Who fills it |
+|---|---|
+| `Icon (optional)` | you, or nobody. PNG only, 256×256+, **10 KB max** |
+| `Name` | you |
+| `Description (optional)` | you |
+| `Connection` — `Server URL` \| `Tunnel` | you. `Tunnel` is for a server on your own machine |
+| the URL field | **you** — this is the one that matters |
+| `Authentication` | you — `OAuth` |
+| `I understand and want to continue` | you. `Create` stays disabled until it is ticked |
+
+Everything below lives behind **Advanced OAuth settings** and is **discovered from the server**. A populated field there means discovery worked; touching it by hand is how a nearly-working connector breaks.
+
+| Group | Fields |
+|---|---|
+| Client registration | `Registration method` — `User-Defined OAuth Client` \| `Dynamic Client Registration (DCR)` \| `Client Identifier Metadata Document (CIMD)` |
+| Scopes | `Default scopes`, `Base scopes` — both textareas, one value per line or comma-separated |
+| OAuth endpoints | `Auth URL`, `Token URL`, `Registration URL`, `Authorization server base`, `Resource` |
+| OpenID support | `OIDC enabled`, `OIDC configuration URL`, `OIDC userinfo endpoint`, `OIDC scopes supported` |
+
+Three things that only show up once you are looking at it:
+
+- **DCR and CIMD render as `(Unavailable)`** in the dropdown when the server did not advertise them. The modal states the cause plainly: *"If Registration URL is missing, Dynamic Client Registration will fail."* So a server with RFC 7591 registration must get that URL into its discovery document, or the user is forced onto a hand-made client for no reason.
+- **`Resource` is the MCP endpoint, not the origin** — the placeholder is `urn:example:resource`, and it is the RFC 8707 resource indicator, which for our servers is the same string as the Server URL.
+- **`OIDC enabled` is greyed out** with *"This server did not advertise an OIDC configuration URL, so OpenID support is unavailable."* That is the normal state and nothing is wrong. OIDC here only lets ChatGPT read the user's email for authorization domain claiming; MCP does not need it.
+
+The claude.ai dialog is four fields against these twenty: `Name`, `Remote MCP server URL`, and under **Advanced settings** an optional `OAuth Client ID` and `OAuth Client Secret`. Both stay empty when the server supports dynamic registration.
+
+**A working card for all of this:** [`../examples/connector-setup/`](../examples/connector-setup/README.md) — React and standalone-HTML versions, config-driven, with a per-field verdict so the user knows which of the twenty inputs are theirs.
 
 ### claude.ai custom connector
 
@@ -119,7 +152,7 @@ curl -sS -X POST https://MCP_ORIGIN/mcp \
 
 Those three `params` are the spec-required set. The `MCP-Protocol-Version` header is mandated on every request **after** initialize, not on initialize itself — it is here so the same line works for the follow-up calls ([lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)). Send the version the **server** advertises.
 
-**A 401 is a passing smoke test.** Verified live 2026-08-13 against two independent servers. `codex-build-week`: no credentials → `401`, `www-authenticate: Bearer realm="asisten-pribadi-mcp", error="invalid_token"`; `GET /mcp` → `405`, `allow: POST, OPTIONS`. `rahmanef.com`: `401`, `www-authenticate: Bearer resource_metadata="https://rahmanef.com/.well-known/oauth-protected-resource"`; `GET /mcp` → `405`, `allow: POST`. Expect a 401 and a 405 — the `www-authenticate` form and the `allow` list are per-server, so assert on the status codes, not the strings. That proves DNS, TLS, routing and the auth gate. You are ruling out a `404` (wrong path, or on Convex the `.cloud` origin instead of `.site` — `convex/mcp/routes.ts:1-3`) and a timeout. Say so next to the button, or a reader who sees 401 re-mints a token that was never the problem.
+**A 401 is a passing smoke test.** Verified live 2026-08-13 against two independent servers. Server A: no credentials → `401`, `www-authenticate: Bearer realm="SERVER_NAME", error="invalid_token"`; `GET /mcp` → `405`, `allow: POST, OPTIONS`. Server B: `401`, `www-authenticate: Bearer resource_metadata="https://MCP_ORIGIN/.well-known/oauth-protected-resource"`; `GET /mcp` → `405`, `allow: POST`. Expect a 401 and a 405 — the `www-authenticate` form and the `allow` list are per-server, so assert on the status codes, not the strings. That proves DNS, TLS, routing and the auth gate. You are ruling out a `404` (wrong path, or on Convex the `.cloud` origin instead of `.site` — `convex/mcp/routes.ts:1-3`) and a timeout. Say so next to the button, or a reader who sees 401 re-mints a token that was never the problem.
 
 **Two-secret servers need two rows.** The worked example wants both `Authorization: Bearer MCP_API_KEY` and `X-Action-API-Key: AGENT_TOKEN`, with a one-field fallback `Bearer MCP_API_KEY:AGENT_TOKEN` "for clients whose connector form exposes only one credential field" (`convex/mcp/auth.ts:19-31`). Render both; the single-field one is what claude.ai and mcp-remote profiles can hold.
 

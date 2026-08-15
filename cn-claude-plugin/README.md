@@ -54,4 +54,4 @@ Bonus: connectors added at claude.ai show up automatically in Claude Code's `/mc
 
 ## Worked example
 
-`codex-build-week` (TemanUsaha AI, Next.js + Convex) is cited throughout with real paths. Its `convex/mcp/routes.ts` states in a comment that it is **Phase 1, bearer only**, with OAuth 2.1 + PKCE explicitly deferred — so it is a real example of a server that connects fine from Claude Code today and is blocked from the claude.ai connector form. It ships no plugin: a repo-wide grep for `.claude-plugin|marketplace.json|CLAUDE_PLUGIN_ROOT` returns zero hits.
+The worked example (Next.js + Convex) is cited throughout with real paths. Its `convex/mcp/routes.ts` states in a comment that it is **Phase 1, bearer only**, with OAuth 2.1 + PKCE explicitly deferred — so it is a real example of a server that connects fine from Claude Code today and is blocked from the claude.ai connector form. It ships no plugin: a repo-wide grep for `.claude-plugin|marketplace.json|CLAUDE_PLUGIN_ROOT` returns zero hits.

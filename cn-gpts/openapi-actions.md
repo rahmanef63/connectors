@@ -7,7 +7,7 @@ Four things carry the weight: `servers[0].url`, `security` + `components.securit
 
 ## Minimum viable schema
 
-Abridged from `codex/GPTs/temanusaha-actions.yaml` lines 1-33 and 141-146 (`info.description` and the response bodies elided):
+Abridged from `GPTs/SERVER_NAME-actions.yaml` lines 1-33 and 141-146 (`info.description` and the response bodies elided):
 
 ```yaml
 openapi: 3.1.0
@@ -15,7 +15,7 @@ info:
   title: Asisten Pribadi AI — Demo Actions API
   version: 0.1.0
 servers:
-  - url: https://utmost-snake-682.convex.site
+  - url: https://MCP_ORIGIN
 security:
   - ApiKeyAuth: []
 paths:
@@ -37,12 +37,12 @@ components:
 
 | Element | Rule | Evidence |
 |---|---|---|
-| `openapi` | `3.1.0` in both worked files | `action-schema.json:2`, `temanusaha-actions.yaml:1` |
+| `openapi` | `3.1.0` in both worked files | `action-schema.json:2`, `SERVER_NAME-actions.yaml:1` |
 | `servers` | exactly one entry, absolute HTTPS origin | `action-schema.json:8-13` |
 | `security` | declared globally once, not per-operation | `action-schema.json:14-18` |
 | `operationId` | **this is the tool name the model sees.** Unique, snake_case, verb-first | all 6 ops |
-| `description` | model-facing prompt context, not docs — say when to use the op | `temanusaha-actions.yaml:23` |
-| `additionalProperties: false` | on every request body, so the model cannot invent fields | `temanusaha-actions.yaml:165, 175` |
+| `description` | model-facing prompt context, not docs — say when to use the op | `SERVER_NAME-actions.yaml:23` |
+| `additionalProperties: false` | on every request body, so the model cannot invent fields | `SERVER_NAME-actions.yaml:165, 175` |
 | `$ref` | internal `#/components/...` refs work; the schema is one pasted blob | throughout |
 
 ## Hard limits
@@ -80,7 +80,7 @@ The only machine-enforced safety flag in the whole surface. `alfa.md:221`: mutat
 
 **Absent is not unsafe.** [`developers.openai.com/api/docs/actions/production`](https://developers.openai.com/api/docs/actions/production): *"If the field isn't present, ChatGPT defaults all GET operations to `false` and all other operations to `true`."*
 
-So the flag appearing 6 times in `action-schema.json` (`true` at 91, 214 — both mutations; `false` at 40, 325, 374, 411 — all GETs) and **zero** times in `temanusaha-actions.yaml` is cosmetic: every explicit flag restates the default, and the two files behave identically. `alfa.md:187` step 5 telling the reader to paste the YAML is fine. Set the flag explicitly only to invert a default — a GET that is consequential, or a mutation that is not.
+So the flag appearing 6 times in `action-schema.json` (`true` at 91, 214 — both mutations; `false` at 40, 325, 374, 411 — all GETs) and **zero** times in `SERVER_NAME-actions.yaml` is cosmetic: every explicit flag restates the default, and the two files behave identically. `alfa.md:187` step 5 telling the reader to paste the YAML is fine. Set the flag explicitly only to invert a default — a GET that is consequential, or a mutation that is not.
 
 ## Auth
 
@@ -88,7 +88,7 @@ The Actions panel's Authentication selector, then the schema must match it.
 
 | Option | Worked example | Notes |
 |---|---|---|
-| API key → **Custom header** | **yes** — header `X-Action-API-Key`, value from the Convex env var `ACTION_API_KEY` (`alfa.md:184-186`) | matches `type: apiKey, in: header, name: X-Action-API-Key` (`temanusaha-actions.yaml:142-146`) |
+| API key → **Custom header** | **yes** — header `X-Action-API-Key`, value from the Convex env var `ACTION_API_KEY` (`alfa.md:184-186`) | matches `type: apiKey, in: header, name: X-Action-API-Key` (`SERVER_NAME-actions.yaml:142-146`) |
 | API key → Basic / Bearer | not used | same panel, different wire prefix |
 | None | not used | public read-only APIs only |
 | OAuth | not used | for per-user connection, ChatGPT's OAuth path is the MCP connector route → [`../cn-mcp-core/`](../cn-mcp-core/README.md) |
@@ -111,7 +111,7 @@ Different gate from the OpenAI plugins directory, which requires a privacy-polic
 
 ## Two files, same spec, different fidelity
 
-The worked example commits both and `alfa.md:191` requires identical operation IDs, paths and schemas across them: `action-schema.json` (784 lines) carries full response examples plus the 6 consequential flags, `temanusaha-actions.yaml` (234 lines) is `$ref`-only and flagless. Worth the duplication only if something else consumes the JSON — otherwise keep one file.
+The worked example commits both and `alfa.md:191` requires identical operation IDs, paths and schemas across them: `action-schema.json` (784 lines) carries full response examples plus the 6 consequential flags, `SERVER_NAME-actions.yaml` (234 lines) is `$ref`-only and flagless. Worth the duplication only if something else consumes the JSON — otherwise keep one file.
 
 ## Gotchas
 

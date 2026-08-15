@@ -4,7 +4,7 @@
  * operation through the official file-parameter contract without requiring the
  * model to manually orchestrate internal storage protocol."
  *
- * The consumer below is a stand-in for CareerPack: it implements the two
+ * The consumer below is a stand-in for a real app: it implements the two
  * adapter interfaces and nothing else. If this passes, a real consumer needs
  * only to swap the two fakes for real storage. */
 import { describe, expect, it, vi } from "vitest";
