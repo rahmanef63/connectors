@@ -72,7 +72,9 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 You will hit this the moment you try to verify a `TODO: verify` against Anthropic's or OpenAI's help centre.
 
 - **`support.claude.com`** returns 200 to `curl`, but the body is a JS shell — the article text hydrates client-side, so a plain fetch reads as an empty page rather than as a failure. **A rendering fetch tool does read it** (verified 2026-08-15); reach for a browser only if yours does not.
-- **`help.openai.com`** returns **403**, and still did on 2026-08-15 to a rendering fetch as well as to `curl`. The 403 is **per session, not per article**, so retrying the same URL from the same context never recovers. This one genuinely needs a browser.
+- **`help.openai.com` is behind a Cloudflare bot challenge and a browser no longer gets through.** Re-tested end to end on 2026-08-15: `curl` returns `403` with `cf-mitigated: challenge` and `server: cloudflare`; real headless Chromium with a warm-up navigation, a desktop UA and `navigator.webdriver` masked also returns `403`, and the challenge never clears — thirty seconds of polling, empty body throughout. The Playwright recipe that worked on 2026-08-13 is dead, at least from a datacenter IP. **Do not spend time on it.**
+
+  What does work: **search-engine snippets.** The article text is indexed, so a targeted web search returns the sentences you need, with the caveat that you are quoting an index rather than the page. Two of this repo's long-standing questions closed that way. Prefer a vendor's own developer-docs host over its help centre wherever both exist — `developers.openai.com` and `claude.com/docs` are both plain and fetchable.
 
 Also worth knowing: `claude.com/docs/*` is plain and fetchable, and it carries things the `support.claude.com` help articles do not — the Connectors Directory submission flow and the plugin submission rules both live there. Several long-standing gaps in this repo closed by looking there rather than at the help centre.
 
