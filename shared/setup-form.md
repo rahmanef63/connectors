@@ -126,7 +126,7 @@ Project-scoped file:
 } } }
 ```
 
-Two ways this file is *not* interchangeable with Claude Code's, despite looking identical. **No `type` key** — Cursor's remote shape omits it, Claude Code errors without it. And the interpolation syntax is **`${env:NAME}`**, not `${NAME}`: Cursor resolves `${env:NAME}`, `${userHome}`, `${workspaceFolder}` in `command`, `args`, `env`, `url` and `headers`. Paste Claude Code's `${MCP_TOKEN}` here and Cursor sends it literally. `TODO: verify` — whether Cursor tolerates an extra `"type": "http"`.
+Two ways this file is *not* interchangeable with Claude Code's, despite looking identical. **No `type` key** — Cursor's remote shape omits it, Claude Code errors without it. And the interpolation syntax is **`${env:NAME}`**, not `${NAME}`: Cursor resolves `${env:NAME}`, `${userHome}`, `${workspaceFolder}` in `command`, `args`, `env`, `url` and `headers`. Paste Claude Code's `${MCP_TOKEN}` here and Cursor sends it literally. Cursor documents `type` as a **stdio-only** field and identifies a remote server by the presence of `url` alone (cursor.com/docs/mcp, read 2026-08-15), so `"type": "http"` is undefined here rather than merely redundant. Leave it out.
 
 ### mcp-remote (HTTPS → stdio, for Desktop and stdio-only IDEs)
 
@@ -138,7 +138,9 @@ Two ways this file is *not* interchangeable with Claude Code's, despite looking 
 } } }
 ```
 
-No space after that colon, on purpose: "Cursor and Claude Desktop (Windows) have a bug where spaces inside `args` aren't escaped when it invokes `npx`, which ends up mangling these values" (geelen/mcp-remote README, fetched 2026-08-13). Same failure class as the whitespace warning. The package self-describes as "experimental". `TODO: verify` — its behaviour against a POST-only streamable-HTTP endpoint; every README example uses an `/sse` URL.
+No space after that colon, on purpose: "Cursor and Claude Desktop (Windows) have a bug where spaces inside `args` aren't escaped when it invokes `npx`, which ends up mangling these values" (geelen/mcp-remote README, fetched 2026-08-13). Same failure class as the whitespace warning. The package self-describes as "experimental".
+
+**It handles a POST-only endpoint fine, despite every README example using an `/sse` URL.** It picks a transport by strategy, and the default already suits this repo's servers: `http-first` (default) tries streamable HTTP and falls back to SSE on a 404; `sse-first` falls back to HTTP on a **405**, which is exactly what a POST-only endpoint answers to the SSE probe. `http-only` and `sse-only` pin it. Force one with `--transport http-only` if you would rather fail loudly than fall back (geelen/mcp-remote README, read 2026-08-15).
 
 ### curl smoke test
 

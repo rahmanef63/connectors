@@ -52,7 +52,13 @@ SVG gets its own gate: valid UTF-8 XML (`svg_xml_malformed`), `<svg>` root (`svg
 
 Also: `interface.brandColor` must be six-digit hex (`#10A37F` shape), and the logo is asked for **twice** — packaged in the manifest, and uploaded again in the portal Info tab under listing details. Full submission flow is [`../cn-gpt-plugin/publish.md`](../cn-gpt-plugin/publish.md).
 
-`TODO: verify` — three gaps in the published rules: OpenAI gives **no recommended dimension** (only the 48×48 floor and 4096×4096 ceiling, so the 512/1024 sizes below are engineering judgement); it never says whether one file may serve as both `logo` and `composerIcon` (each is validated independently); and it gives no byte limit for screenshots (the 5 MiB cap is stated for *packaged branding assets*, while screenshots "use the separate portal limits").
+Three gaps in the published rules. Re-checked against `submission-errors` on 2026-08-15; two are now closed.
+
+**Screenshots are pinned, not open** — *"Each screenshot must be exactly 706 pixels wide and 400–860 pixels tall"*, at most three (one per starter prompt, when custom UI is present). The width is exact, so a 1412-wide retina export is rejected rather than downscaled.
+
+**The 5 MiB cap is general, not branding-only** — *"Image must not exceed 5 MiB"* sits with the dimension rules that govern every submitted image, alongside the format rule: *"Image filename must end in .png, .jpg, .jpeg, .webp, or .svg."*
+
+`TODO: verify` — the one still open: OpenAI gives **no recommended dimension**, only the 48×48 floor and the 4096×4096 ceiling, so the 512/1024 sizes below remain engineering judgement; and it never states whether one file may serve as both `logo` and `composerIcon`. Both are required and each is validated independently, so pointing them at the same square PNG should pass every published rule — untested, and cheap to test by submitting.
 
 ## Claude
 
@@ -62,7 +68,9 @@ In practice: you cannot supply branding to Claude from your side. Claude Code ig
 
 > If your custom connector's URL is on a domain that matches a listing in the Connectors Directory (for example, a Workato workspace URL), it appears with that service's name and branding instead of a "Custom" label.
 
-This is the one case where your icon is decided for you. A self-hosted server on an unlisted domain renders as generic **"Custom"** and nothing in the flow changes that; a server hosted on a PaaS workspace URL that *is* listed will silently wear that vendor's name and logo. The docs frame this as expected, not a bug. `TODO: verify` — how to get a listing in that directory: no submission path, contact, or requirement list appears in any fetched doc.
+This is the one case where your icon is decided for you. A self-hosted server on an unlisted domain renders as generic **"Custom"** and nothing in the flow changes that; a server hosted on a PaaS workspace URL that *is* listed will silently wear that vendor's name and logo. The docs frame this as expected, not a bug. There **is** a submission path, found 2026-08-15 — it is just not linked from the connector help article. Remote servers go through the [Connectors Directory submission portal](https://claude.ai/admin-settings/directory/submissions/new) inside Claude.ai admin settings, which needs a **Team or Enterprise organization** and directory-management access (Owners by default; on Enterprise an Owner can delegate via a custom role carrying the **Directory** or **Libraries** permission — Team has no custom roles, so it stays with Owners). Requirements are security review, OAuth 2.0 for authenticated services, clear docs, and **tool annotations on every tool** — *"All tools must include a `title` and the applicable `readOnlyHint` or `destructiveHint`."* Status and reviewer feedback appear in the submissions dashboard; `mcp-review@anthropic.com` is the escalation. Full flow: [Submitting to the Connectors Directory](https://claude.com/docs/connectors/building/submission).
+
+Which means the branding above is not permanent: a listed connector carries **your** name and icon. Being shown as "Custom", or wearing your PaaS vendor's logo, is what an *unlisted* domain looks like.
 
 ## Produce four files, once
 
@@ -112,7 +120,9 @@ Serve items 1, 2 and 4 from the MCP endpoint's origin. Declare them strongest-gu
 }
 ```
 
-`MCP_ORIGIN` is the host serving `POST /mcp`, not your marketing site. `.codex-plugin/plugin.json` then gets `"composerIcon": "./assets/icon-512.png"`, `"logo": "./assets/logo-1024.png"`, `"brandColor": "#RRGGBB"`. `.claude-plugin/plugin.json` gets nothing. `TODO: verify` — whether any shipping host actually **renders** `serverInfo.icons` today; the spec only says what clients that *do* render icons must accept, no fetched doc says claude.ai, ChatGPT, Cursor or Cline consumes the field, and OpenAI's MCP pages never mention icons at all. Ship the manifest assets regardless — those are enforced.
+`MCP_ORIGIN` is the host serving `POST /mcp`, not your marketing site. `.codex-plugin/plugin.json` then gets `"composerIcon": "./assets/icon-512.png"`, `"logo": "./assets/logo-1024.png"`, `"brandColor": "#RRGGBB"`. `.claude-plugin/plugin.json` gets nothing. `TODO: verify` — whether any shipping host actually **renders** `serverInfo.icons` today. No fetched doc says claude.ai, ChatGPT, Cursor or Cline consumes the field, and OpenAI's MCP pages never mention icons at all.
+
+One deduction narrows it hard, though it is not a substitute for testing: `Icon` first exists in the **2025-11-25** schema, and hosts today commonly negotiate `2024-11-05` or `2025-06-18`, where the field has no place in the type at all. Until a host both negotiates 2025-11-25 *and* documents rendering, treat `serverInfo.icons` as inert. Ship the manifest assets regardless — those are enforced at submission.
 
 ## How it fails
 
@@ -127,4 +137,4 @@ Serve items 1, 2 and 4 from the MCP endpoint's origin. Declare them strongest-gu
 | Icon blank in one client, fine in another | SVG was the only entry; a client is within spec to refuse it |
 | Dark-mode icon invisible | one SVG with an internal `prefers-color-scheme` instead of two exports — an out-of-DOM rasteriser ignores the media query |
 | Connector shows someone else's logo on claude.ai | your URL's domain matches a Connectors Directory listing; branding follows the domain, not the connector |
-| Icons declared but the client ignores them | `Icon` is documented in the **2025-11-25** schema. The worked example pins `MCP_PROTOCOL_VERSION = "2024-11-05"` (`convex/mcp/types.ts:8`) with the comment *"Do not bump it casually"* — bump the pin first, then advertise. `TODO: verify` whether `Implementation.icons` is legal under earlier revisions. |
+| Icons declared but the client ignores them | `Icon` is documented in the **2025-11-25** schema. The worked example pins `MCP_PROTOCOL_VERSION = "2024-11-05"` (`convex/mcp/types.ts:8`) with the comment *"Do not bump it casually"* — bump the pin first, then advertise. It is **not** legal earlier: the `2025-06-18` schema has no `Icon` type at all, and `Implementation` there is only `BaseMetadata` + `version` (schema source, read 2026-08-15). So a host that negotiates `2024-11-05` or `2025-06-18` has nowhere to put your icons — advertising them cannot work until both sides are on `2025-11-25`. |

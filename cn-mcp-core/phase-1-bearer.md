@@ -68,7 +68,9 @@ It opens a local UI, connects to your URL with a header you paste in, and shows 
 - a notification answered with a body, which a strict client logs as a violation
 - an annotation you thought you set and did not, which is what silently turns a destructive tool into one hosts auto-approve
 
-Run it before every host connection attempt, and again the moment a host says something vague. `TODO: verify` — whether the inspector exercises the OAuth flow end to end, or only bearer/no-auth connections; only the bearer path has been used here.
+**It does OAuth too, not just bearers.** The inspector ships a full authorization implementation — *"OAuth (`core/auth/`) is factored into isomorphic logic plus browser/node/remote backends so the same flows work in the browser, in Node, and against a remote server"*, covering *"providers, discovery, storage, mid-session recovery"* ([inspector README](https://github.com/modelcontextprotocol/inspector), read 2026-08-15). So you can exercise Phase 2 here before any host sees it — which matters, because a broken consent redirect inside ChatGPT tells you nothing at all.
+
+Run it before every host connection attempt, and again the moment a host says something vague.
 
 Then, and only then, wire up a host. When a host still fails after the inspector is clean, the fault is almost always registration or discovery — not your dispatcher.
 

@@ -26,9 +26,26 @@ Rules of thumb that hold up:
 - Its arguments are computed by the model from the conversation → tool, even if it only reads.
 - A user would recognise it as "a thing I run" → prompt.
 
-**Not every host implements all three**, and support for resources and prompts is thinner than for tools — so a server that exposes *only* resources works in fewer places. The pragmatic shape for a first server is tools, with resources added once you have content whose identity a user would want to pick. Do that on purpose rather than by default.
+**Support is not uniform, and the gap runs along the line you would least like.** Verified 2026-08-15:
 
-`TODO: verify` — current per-host support for `resources/*` and `prompts/*` in ChatGPT, claude.ai, Claude Code and Cursor. This repo has only exercised `tools/*`, so treat the paragraph above as design guidance, not as a compatibility claim.
+| Host | Tools | Resources | Prompts |
+|---|---|---|---|
+| **Claude Code** | yes | yes — `@` mentions, listed alongside files in autocomplete | yes — `/mcp__servername__promptname` |
+| **Cursor** | yes | yes — *"structured data sources that can be read and referenced"* | yes — *"templated messages and workflows for users"* |
+| **claude.ai** (web connector) | yes | yes — ingested at connect time | yes — ingested at connect time |
+| **ChatGPT** | yes | **UI templates only** — `registerResource` + `_meta.ui.resourceUri` bind a component to a tool; nothing documents general `resources/read` | not documented |
+
+The claude.ai row is not from the connector help article, which describes tools and only tools. It is from the Connectors Directory submission portal, whose Tools step states that *"your server's tools, prompts, and resources sync automatically from the connected server"* — you cannot sync what the host does not ingest.
+
+**ChatGPT is the outlier, and it is the one most people build for.** It uses the resource mechanism for something else entirely: `registerResource` serves widget markup, bound to a tool through `_meta.ui.resourceUri`. Nothing documents general-purpose `resources/read` there. So a design that leans on resources as *readable content* degrades to nothing on ChatGPT while working on the other three.
+
+The honest shape: **tools everywhere; resources and prompts as an enhancement that ChatGPT will ignore.** Pick the primitive by what the thing *is* — that decides whether the model, the app or the user is in charge — then check this table before assuming every host will honour it.
+
+Sources, read 2026-08-15: [Claude Code MCP](https://code.claude.com/docs/en/mcp) (§Use MCP resources, §MCP prompts as slash commands), [cursor.com/docs/mcp](https://cursor.com/docs/mcp) (feature-support table), [Submitting to the Connectors Directory](https://claude.com/docs/connectors/building/submission) (§Tools), [plugins/reference](https://developers.openai.com/plugins/reference.md). The ChatGPT row is absence from the docs, not a tested negative.
+
+## 0b. If you might ever list it, annotate from day one
+
+Anthropic's directory makes annotations a **submission requirement**, not advice: *"All tools must include a `title` and the applicable `readOnlyHint` or `destructiveHint`."* The portal groups your tools by annotation on the way in and flags the ones missing it, so this is checked before a human ever reviews you. Everything in §6 below is therefore a gate, not a nicety — and retrofitting titles across a grown tool surface is exactly the kind of change [`versioning.md`](./versioning.md) warns you about.
 
 ## 1. Do not mirror your REST API
 

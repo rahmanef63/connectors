@@ -71,10 +71,12 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 
 You will hit this the moment you try to verify a `TODO: verify` against Anthropic's or OpenAI's help centre.
 
-- **`support.claude.com`** returns 200 to `curl`, but the body is a JS shell — the article text hydrates client-side, so a plain fetch reads as an empty page rather than as a failure.
-- **`help.openai.com`** returns **403** to `curl` and to plain fetch tooling. The 403 is **per session, not per article**, so retrying the same URL from the same context never recovers.
+- **`support.claude.com`** returns 200 to `curl`, but the body is a JS shell — the article text hydrates client-side, so a plain fetch reads as an empty page rather than as a failure. **A rendering fetch tool does read it** (verified 2026-08-15); reach for a browser only if yours does not.
+- **`help.openai.com`** returns **403**, and still did on 2026-08-15 to a rendering fetch as well as to `curl`. The 403 is **per session, not per article**, so retrying the same URL from the same context never recovers. This one genuinely needs a browser.
 
-Both yield to a real browser. What worked: Playwright + Chromium, a **fresh browser context per page**, a warm-up navigation to the help-centre root first, then ~4s after `goto` and ~6s between pages. That took `help.openai.com` from 5-of-8 pages to 8-of-8. Do not conclude a page is gone because a fetch tool could not read it.
+Also worth knowing: `claude.com/docs/*` is plain and fetchable, and it carries things the `support.claude.com` help articles do not — the Connectors Directory submission flow and the plugin submission rules both live there. Several long-standing gaps in this repo closed by looking there rather than at the help centre.
+
+Where a browser is needed: What worked: Playwright + Chromium, a **fresh browser context per page**, a warm-up navigation to the help-centre root first, then ~4s after `goto` and ~6s between pages. That took `help.openai.com` from 5-of-8 pages to 8-of-8. Do not conclude a page is gone because a fetch tool could not read it.
 
 ## Before you return
 
