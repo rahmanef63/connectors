@@ -9,7 +9,7 @@ Produce one remote MCP server in the target codebase, plus whatever registration
 
 ## Load only what applies
 
-There are 27 Markdown files here. Two live in `docs/` and are dated point-in-time reports, not guidance — read them only when working on the shared-code question. Reading all of them costs tokens you want for the build. Open the folder that matches the goal, then pull single `shared/` files on demand ([`shared/README.md`](./shared/README.md) is that folder's own table). The per-goal orders below are the intended budget.
+Every Markdown file here is guidance; there are no dated reports to skip. Reading all of them still costs tokens you want for the build. Open the folder that matches the goal, then pull single `shared/` files on demand ([`shared/README.md`](./shared/README.md) is that folder's own table). The per-goal orders below are the intended budget.
 
 ## File map
 
@@ -19,13 +19,11 @@ There are 27 Markdown files here. Two live in `docs/` and are dated point-in-tim
 | `AGENTS.md` | this file — agent router |
 | `LICENSE` | MIT, 2026 rahmanef63 |
 | `packages/mcp-files/` | **code** — the shared OpenAI file-input contract: schema builders, SSRF-safe ingestion, store/attach adapter seams. `README.md` there is the quickstart |
-| `docs/2026-08-14-spec-baseline.md` | which specs the guidance is written against, and when each was verified |
-| `docs/2026-08-14-ssot-gap-report.md` | point-in-time audit of one consumer against this repo, and what a shared code layer would own |
 | `cn-mcp-core/README.md` | the design invariant, the phase decision tree, framework/DB adaptation notes, spec links |
 | `cn-mcp-core/phase-1-bearer.md` | the endpoint: JSON-RPC dispatch, bearer auth, tool registry |
 | `cn-mcp-core/phase-2-oauth.md` | the authorization half: consent page, auth codes, token exchange, discovery documents |
 | `cn-mcp-core/phase-3-admin-ui.md` | where a human mints, inspects and revokes their own tokens |
-| `shared/README.md` | router for `shared/` — the "open when" table for all ten files |
+| `shared/README.md` | router for `shared/` — the "open when" table for all eleven files |
 | `shared/tool-design.md` | naming, granularity, response shape — decides whether the server is any good |
 | `shared/clients.md` | per-host matrix: transport accepted, registration path, whether a bridge is needed |
 | `shared/oauth.md` | OAuth 2.1 + PKCE S256 in implementable detail |
@@ -66,6 +64,15 @@ There are 27 Markdown files here. Two live in `docs/` and are dated point-in-tim
 - **Honesty beats fluency.** If a claim is not confirmed by a doc you actually fetched or a file you actually read, write `TODO: verify` inline. A confident wrong registration requirement costs the reader hours.
 - **Never name a consumer application here.** This repo is a cookbook for any app, so no product name, deployment id or customer hostname belongs in it. Concrete servers are `MCP_ORIGIN` / `SERVER_NAME` / `mcp.example.com`; a real one is cited as "the worked example".
 - **The worked example is at Phase 1, bearer only.** Its `convex/mcp/routes.ts` header comment defers OAuth 2.1 + PKCE to a later phase. Cite it with real paths and real snippets; never describe it as having OAuth today.
+
+## Two vendor doc sites refuse automated fetching
+
+You will hit this the moment you try to verify a `TODO: verify` against Anthropic's or OpenAI's help centre.
+
+- **`support.claude.com`** returns 200 to `curl`, but the body is a JS shell — the article text hydrates client-side, so a plain fetch reads as an empty page rather than as a failure.
+- **`help.openai.com`** returns **403** to `curl` and to plain fetch tooling. The 403 is **per session, not per article**, so retrying the same URL from the same context never recovers.
+
+Both yield to a real browser. What worked: Playwright + Chromium, a **fresh browser context per page**, a warm-up navigation to the help-centre root first, then ~4s after `goto` and ~6s between pages. That took `help.openai.com` from 5-of-8 pages to 8-of-8. Do not conclude a page is gone because a fetch tool could not read it.
 
 ## Before you return
 
