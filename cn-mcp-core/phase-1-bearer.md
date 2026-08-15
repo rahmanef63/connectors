@@ -50,4 +50,26 @@ curl -X POST $BASE/mcp -H "authorization: Bearer $TOKEN" \
 # then tools/list, then tools/call
 ```
 
+## Debug against the Inspector, never against a host
+
+The single worst place to develop an MCP server is inside ChatGPT or claude.ai. Those hosts **swallow protocol errors on purpose** — a malformed descriptor or a bad `initialize` reply surfaces as "couldn't connect" or as a tool that silently never appears, with no way to see the JSON that caused it. You end up guessing.
+
+Use the official inspector instead. It needs no install and no host account:
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+It opens a local UI, connects to your URL with a header you paste in, and shows the raw JSON-RPC both ways. What it catches in seconds and a host will never tell you:
+
+- `initialize` returning a `protocolVersion` the client did not ask for and cannot use
+- a tool missing from `tools/list` because its descriptor failed to serialize — the classic being a `$`-prefixed JSON Schema key, which on some backends throws for the *entire* list rather than the one tool
+- `tools/call` returning a protocol `error` where it should return `result.isError`
+- a notification answered with a body, which a strict client logs as a violation
+- an annotation you thought you set and did not, which is what silently turns a destructive tool into one hosts auto-approve
+
+Run it before every host connection attempt, and again the moment a host says something vague. `TODO: verify` — whether the inspector exercises the OAuth flow end to end, or only bearer/no-auth connections; only the bearer path has been used here.
+
+Then, and only then, wire up a host. When a host still fails after the inspector is clean, the fault is almost always registration or discovery — not your dispatcher.
+
 Next: [`phase-2-oauth.md`](./phase-2-oauth.md) if any consumer AI host has to connect.

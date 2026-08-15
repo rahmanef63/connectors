@@ -7,7 +7,7 @@ Your server does not change per host. What changes is **registration** and, for 
 
 | Host | Transport it accepts | Client registration | Notes |
 |---|---|---|---|
-| **ChatGPT** (apps / connectors) | remote HTTPS **only** | User-Defined OAuth Client — no DCR | No API-key field anywhere. OAuth is mandatory, not a choice. |
+| **ChatGPT** (apps / connectors) | remote HTTPS **only** | DCR, CIMD **or** a user-defined client — you pick in the form | No API-key field anywhere. OAuth is mandatory, not a choice. |
 | **Claude.ai** (web connectors) | remote HTTPS | expects **RFC 7591 DCR** | Advertise `registration_endpoint` or it cannot self-register. |
 | **Claude Code / Claude Desktop** | remote HTTPS, or stdio via `mcp-remote` | DCR when remote | Desktop config takes a JSON snippet — ship it in your setup card. |
 | **Cursor** | remote HTTPS (streamable) | expects DCR | Also happy with a bearer in a config header. |
@@ -16,24 +16,22 @@ Your server does not change per host. What changes is **registration** and, for 
 
 **The one hard constraint:** ChatGPT will not talk to stdio. If a host you care about is desktop-only, `mcp-remote` bridges HTTPS → stdio; you do not build a second server.
 
-## ChatGPT connector form (exact mapping)
+## ChatGPT connector form
 
-Settings → Connectors → New App:
+**The field-by-field mapping lives in [`setup-form.md`](./setup-form.md#the-modals-actual-fields), and only there.** This file used to carry a second copy of that table. It drifted — it claimed ChatGPT had no DCR, told you to invent a client id, and hardcoded the authorization server base to the frontend origin. All three are wrong on a server that advertises registration, and the two tables disagreeing was worse than either being incomplete.
 
-| Field | Value |
-|---|---|
-| MCP Server URL | `https://MCP_ORIGIN/mcp` (on self-hosted Convex this is the SITE origin) |
-| Authentication | `OAuth` |
-| Registration method | `User-Defined OAuth Client` |
-| Client ID | any string (`chatgpt-yourapp`) |
-| Client Secret | *empty* |
-| Token endpoint auth method | `none` |
-| Auth URL | `https://FRONTEND/oauth/authorize` |
-| Token URL | `https://FRONTEND/oauth/token` — must match where your route actually lives |
-| Authorization server base | `https://FRONTEND` |
-| Resource | `https://MCP_ORIGIN/mcp` |
+Two things that belong here rather than there, because they are about choosing a host:
 
-**Verify discovery before clicking Create.** `curl` both `.well-known/*` documents. A 404 there is the single most common cause of *"MCP server does not implement OAuth"* — the error names OAuth but the fault is usually routing.
+**Almost every field in that form is discovered, not typed.** You supply a name and the server URL; the twenty-odd inputs behind **Advanced OAuth settings** are read out of your `.well-known` documents. Which means the work is getting discovery right, not filling a form correctly.
+
+**Verify discovery before clicking Create.** `curl` both documents. A 404 there is the single most common cause of *"MCP server does not implement OAuth"* — the error names OAuth, the fault is usually routing.
+
+```bash
+curl -sS https://MCP_ORIGIN/.well-known/oauth-protected-resource
+curl -sS https://MCP_ORIGIN/.well-known/oauth-authorization-server
+```
+
+Read what comes back rather than assuming: `authorization_servers[0]` is frequently **not** the same host as `authorization_endpoint`. A server whose consent page is a frontend route and whose registration endpoint is a backend route will legitimately name two different origins, and someone "fixing" that mismatch by hand breaks a working connector.
 
 ## Claude.ai / Cursor — add DCR
 

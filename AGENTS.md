@@ -23,8 +23,10 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 | `cn-mcp-core/phase-1-bearer.md` | the endpoint: JSON-RPC dispatch, bearer auth, tool registry |
 | `cn-mcp-core/phase-2-oauth.md` | the authorization half: consent page, auth codes, token exchange, discovery documents |
 | `cn-mcp-core/phase-3-admin-ui.md` | where a human mints, inspects and revokes their own tokens |
-| `shared/README.md` | router for `shared/` — the "open when" table for all eleven files |
-| `shared/tool-design.md` | naming, granularity, response shape — decides whether the server is any good |
+| `shared/README.md` | router for `shared/` — the "open when" table for all thirteen files |
+| `shared/tool-design.md` | tool vs resource vs prompt, naming, granularity, annotations — decides whether the server is any good |
+| `shared/results.md` | what `tools/call` hands back: `structuredContent`, the `outputSchema` one-way door, `isError` |
+| `shared/testing.md` | catalog snapshot, host-facing invariants, golden prompts — the failures that never throw |
 | `shared/clients.md` | per-host matrix: transport accepted, registration path, whether a bridge is needed |
 | `shared/oauth.md` | OAuth 2.1 + PKCE S256 in implementable detail |
 | `shared/transport.md` | `POST /mcp` JSON-RPC shape, SSE, status codes, discovery documents |
@@ -47,7 +49,7 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 
 | Goal | Order |
 |---|---|
-| **Build the server** | `cn-mcp-core/README.md` → `cn-mcp-core/phase-1-bearer.md` → `shared/tool-design.md` → `shared/transport.md` → `shared/convex.md` *(Convex only)* → `cn-mcp-core/phase-2-oauth.md` + `shared/oauth.md` *(any consumer host)* → `cn-mcp-core/phase-3-admin-ui.md` *(per-user tokens)* → `shared/security-checklist.md` |
+| **Build the server** | `cn-mcp-core/README.md` → `cn-mcp-core/phase-1-bearer.md` → `shared/tool-design.md` → `shared/transport.md` → `shared/convex.md` *(Convex only)* → `cn-mcp-core/phase-2-oauth.md` + `shared/oauth.md` *(any consumer host)* → `cn-mcp-core/phase-3-admin-ui.md` *(per-user tokens)* → `shared/results.md` *(before you settle the result shape)* → `shared/testing.md` → `shared/security-checklist.md` |
 | **Accept an image or file** | `shared/file-inputs.md` — the whole contract, both directions → `shared/convex.md` *(Convex: `$`-keys are fatal here)* → `shared/security-checklist.md` |
 | **Ship the setup UI** | `shared/setup-form.md` — the spec, read it first → `cn-mcp-core/phase-3-admin-ui.md` *(what the card sits inside)* → `shared/clients.md` *(per-host detail behind a tab)* → `shared/icons.md` *(only if the card carries branding)* |
 | **Ship to Claude** | `cn-claude-plugin/README.md` → stop if the answer is "paste the URL" → `cn-claude-plugin/manifest.md` *(team `.mcp.json` or a shareable bundle)* → `cn-claude-plugin/marketplace.md` *(others install it)*. Skip `shared/icons.md`: Claude exposes no icon field anywhere |

@@ -78,7 +78,7 @@ Each folder's `README.md` is the orientation and the decision table; the files b
 
 ## shared
 
-Eleven cross-cutting files, read alongside whichever folder you picked — tool design, per-host clients, transport, OAuth, Convex, the setup form, file and image inputs, icons, versioning, pitfalls, the security gate. The "open when" table for all of them lives in [`shared/README.md`](./shared/README.md); pull single files from there on demand.
+Thirteen cross-cutting files, read alongside whichever folder you picked — tool design, per-host clients, transport, results, OAuth, Convex, the setup form, file and image inputs, icons, versioning, testing, pitfalls, the security gate. The "open when" table for all of them lives in [`shared/README.md`](./shared/README.md); pull single files from there on demand.
 
 ## Reference implementation
 

@@ -45,9 +45,49 @@ Deleting first makes the code genuinely single-use: a replayed code lands on the
 
 **Every failure returns the same opaque `invalid_grant`.** Distinguishing "unknown" from "expired" from "PKCE mismatch" only helps an attacker narrow down a captured flow. Keep the detail in server logs.
 
-## Scope
+## Scope — advertising it is the easy half
 
 If you advertise exactly one scope, **store the literal** — never echo back a narrower scope the client asked for. A client that requests `mcp.read` and is told it got `mcp.read` while holding full write is a lie your own audit log will repeat.
+
+### The half that gets skipped: actually checking it
+
+A scope that is published in discovery, requested at consent, and written onto the token row does **nothing** until something compares it against the tool being called. This is a real and common hole, not a hypothetical: a server can advertise `mcp.read`/`mcp.write`, show the user a consent screen naming them, store them on every token — and still let a read-only token call `delete`, because the dispatcher only ever checked *that a user resolved*. Everything looks right from the outside, including your own audit log, which faithfully records a scope nobody enforced.
+
+Check **per call**, in the dispatcher, before the handler runs:
+
+```ts
+if (!satisfiesScope(auth.scopes, tool.scope)) {
+  return { jsonrpc: "2.0", id, error: {
+    code: -32003,                       // implementation-defined range
+    message: `This token lacks ${tool.scope}, required by ${tool.name}.`,
+    data: { required_scope: tool.scope, granted_scopes: auth.scopes },
+  }};
+}
+```
+
+Three things make this cheap enough that there is no excuse:
+
+**Derive the scope, do not write it per tool.** You already declare `readOnlyHint` on every tool. The required scope follows from it:
+
+```ts
+const scopeForTool = (t) => t.scope ?? (t.annotations.readOnlyHint === true ? READ : WRITE);
+```
+
+Now a hundred tools are covered without touching a hundred files, and the scope can never contradict the annotation — they assert the same fact, and asserting the same fact twice is exactly how two things drift apart. Keep `t.scope` as an override for the rare tool whose authority genuinely differs from its hint.
+
+**Write implies read; read never implies write.** A client granted `mcp.write` that then cannot list is simply broken, and every real deployment behaves this way.
+
+**Answer with a real 403, not a 200 that says no.** RFC 6750 §3.1 — the challenge tells the client what to re-authorize *for*, which is what lets it recover instead of retrying forever:
+
+```
+HTTP/1.1 403 Forbidden
+WWW-Authenticate: Bearer realm="SERVER_NAME", error="insufficient_scope",
+  scope="mcp.write", resource_metadata="https://MCP_ORIGIN/.well-known/oauth-protected-resource"
+```
+
+One carve-out: a **batch** stays 200, because a single status cannot describe a mixed array, and the per-entry JSON-RPC errors already carry the same detail.
+
+**Before you turn enforcement on, look at the tokens you have already issued.** Every live token minted before this existed carries whatever scope string you were storing then. If that string is empty or narrower than what its owner actually uses, enforcement is a silent outage for them. Query the table first; it is a one-line check and the alternative is finding out from a user.
 
 ## Routes
 

@@ -9,6 +9,10 @@
 
 Methods to implement: `initialize`, `tools/list`, `tools/call`, `ping`. Ack `notifications/*`.
 
+That is the tools surface, and it is what most servers need. MCP also defines `resources/*` and `prompts/*` — a different primitive with a different controller, covered in [`tool-design.md`](./tool-design.md#0-a-tool-is-one-of-three-primitives-and-often-the-wrong-one). Decide you do not need them; do not skip them by accident.
+
+`tools/list` is paginated in the spec: it accepts an opaque `cursor` and may return `nextCursor`. A registry of a few dozen tools fits in one page and every shipping client reads one, so returning the whole list is fine — but if you are generating tools per tenant or per table, that assumption is yours to check, not the spec's.
+
 ## Streamable HTTP vs SSE
 
 Modern hosts use **streamable HTTP**. Some older or IDE clients still expect **SSE**. Notion serves both — streamable HTTP suits Cursor, SSE buys compatibility with more clients — and crucially, **the payloads are identical**. Supporting SSE is a transport concern, never a second tool surface or a second output format.
@@ -46,9 +50,10 @@ Capabilities: `{ tools: { listChanged: false } }` unless you genuinely push list
 | `-32602` | unknown tool, or bad arguments — this is the spec's own worked example |
 | `-32603` | your dispatcher threw |
 | `-32001` (custom) | unauthorized — pair it with HTTP 401 + `WWW-Authenticate` |
+| `-32003` (custom) | **insufficient scope** — pair it with HTTP 403 + an RFC 6750 challenge naming the scope required ([`oauth.md`](./oauth.md#the-half-that-gets-skipped-actually-checking-it)) |
 | `-32029` (custom) | rate limited — pair it with HTTP 429 + `Retry-After` |
 
-**Execution failures are not protocol errors.** A tool that ran and failed returns `result.isError = true` with text. Only the transport/dispatch layer uses the `error` envelope.
+**Execution failures are not protocol errors.** A tool that ran and failed returns `result.isError = true` with text. Only the transport/dispatch layer uses the `error` envelope. The full result shape — text content, `structuredContent`, and why declaring an `outputSchema` is usually a downgrade — is [`results.md`](./results.md).
 
 ## Status codes that matter to a host
 

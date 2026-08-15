@@ -10,6 +10,8 @@
 - [ ] Access tokens carry `expiresAt` + a revoke path, re-validated on every call
 - [ ] Tokens **and** auth codes stored as sha256; raw value returned exactly once, at mint
 - [ ] No surface re-renders a minted token — no preview column, not even a masked prefix. The reveal happens once, from the value still in memory; a page that can show it again is a page whose database holds plaintext ([`setup-form.md`](./setup-form.md))
+- [ ] **Advertised scopes are actually enforced per call**, in the dispatcher, before the handler runs — a scope published in discovery, consented to, and stored on the token row does nothing until something compares it against the tool. Failure answers 403 + RFC 6750 `insufficient_scope`, not a 200 that says no ([`oauth.md`](./oauth.md#the-half-that-gets-skipped-actually-checking-it))
+- [ ] No write tool is reachable by a read-only token — assert it over the whole registry, not per tool ([`testing.md`](./testing.md))
 - [ ] 401 carries `WWW-Authenticate: Bearer resource_metadata="…"`
 - [ ] Discovery documents pin their origin to a CONSTANT, never the request `Host` header
 - [ ] No raw secrets in tool output

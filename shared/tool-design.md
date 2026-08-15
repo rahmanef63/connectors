@@ -5,6 +5,31 @@
 
 Auth is where you get hacked; **tool design is where you get ignored**. A correct server with a bad tool surface produces an assistant that picks the wrong tool, burns tokens, and gives up.
 
+## 0. A tool is one of three primitives, and often the wrong one
+
+Everything else in this repo is about tools, because tools are what most apps need. But MCP defines three server primitives, and reaching for a tool by reflex is a design mistake worth catching before you write a hundred of them.
+
+| Primitive | Who decides to use it | Reach for it when |
+|---|---|---|
+| **Tool** | the **model**, mid-conversation | something happens, or a query needs arguments the model composes |
+| **Resource** | the **application**, usually the user picking from a list | you are exposing readable content that exists at a stable address — a document, a record, a file |
+| **Prompt** | the **user**, explicitly, as a slash command or menu entry | you are shipping a workflow you want invoked deliberately, not guessed at |
+
+The distinction that matters: **a tool is model-controlled, a resource is application-controlled, a prompt is user-controlled.** Three different things get to decide, and picking the wrong primitive means the wrong actor is in charge.
+
+The common mistake is a read-only `get_document(id)` tool for content the user was going to select anyway. As a tool the model must first *discover* the id — usually by calling a list tool and burning its output into context — then guess whether reading it is wanted. As a resource the host shows a picker, the user attaches what they meant, and no tokens are spent on discovery at all.
+
+Rules of thumb that hold up:
+
+- It **does** something, or it has side effects → tool. Always.
+- It is a stable, addressable, readable thing → resource. A tool is a poor substitute for an address.
+- Its arguments are computed by the model from the conversation → tool, even if it only reads.
+- A user would recognise it as "a thing I run" → prompt.
+
+**Not every host implements all three**, and support for resources and prompts is thinner than for tools — so a server that exposes *only* resources works in fewer places. The pragmatic shape for a first server is tools, with resources added once you have content whose identity a user would want to pick. Do that on purpose rather than by default.
+
+`TODO: verify` — current per-host support for `resources/*` and `prompts/*` in ChatGPT, claude.ai, Claude Code and Cursor. This repo has only exercised `tools/*`, so treat the paragraph above as design guidance, not as a compatibility claim.
+
 ## 1. Do not mirror your REST API
 
 The instinct is a tool per endpoint. Resist it. Notion, building their hosted server, deliberately moved away from 1:1 API mapping toward agent-oriented tools (`create-pages`, `update-page`, `search`) and put it plainly: you can *"skip RESTful web API practices and ship 'private' functionality slices with LLM-friendly descriptions."*
