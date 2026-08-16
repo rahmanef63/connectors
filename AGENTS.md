@@ -83,6 +83,6 @@ Where a browser is needed: What worked: Playwright + Chromium, a **fresh browser
 ## Before you return
 
 1. Every path you cite resolves — in this repo and in the target codebase.
-2. Every host-specific claim is either sourced or marked `TODO: verify`.
+2. Every host-specific claim is either sourced or marked `TODO: verify`. If you close one, delete its row from the **What is still unverified** table in [`README.md`](./README.md); if you open a new one, add a row. That table is the index and it goes stale silently.
 3. No server logic branches on the calling host.
 4. Report which files you actually read, so the next agent can skip them.

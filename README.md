@@ -88,6 +88,25 @@ Read it honestly: it is at **Phase 1, bearer only**. Its `convex/mcp/routes.ts` 
 
 Where a claim could not be confirmed from a fetched doc or from that repo, the text says `TODO: verify` inline instead of guessing. A confident wrong statement about a registration requirement costs you hours, which is the exact failure this repo exists to prevent.
 
+## What is still unverified
+
+Six open questions, listed here rather than left buried inline. Every one is marked at the point of use too, so you meet it where it matters — this is the index.
+
+**None of these is blocked on effort.** Each has been searched to exhaustion; the answer is not published anywhere the vendor puts documentation. That is a different and more useful statement than "not looked into yet", and it is why they are worth showing rather than quietly carrying.
+
+| # | Question | Where | What bounds it |
+|---|---|---|---|
+| 1 | What does "**valid**" mean mechanically for a GPT Actions privacy-policy URL? | [`cn-gpts/openapi-actions.md`](./cn-gpts/openapi-actions.md) | Three help-centre pages say "valid" and none defines it. The *plugins* directory does publish its validator codes for the same field — `wrong_type`, `empty`, `format`, `too_long` — and every one is a **static** check that never fetches the URL. Different pipeline, so it settles nothing, but it points at well-formed rather than reachable. |
+| 2 | Can a **No Authentication** server exposing write tools pass OpenAI directory review? | [`cn-gpt-plugin/publish.md`](./cn-gpt-plugin/publish.md) | Review grades *disclosure*, not auth mode. Anthropic's directory does accept no-auth as one of three modes — different vendor, no read-across. |
+| 3 | Which **protocol revisions does ChatGPT accept**? | [`cn-gpt-plugin/register.md`](./cn-gpt-plugin/register.md) | The spec sets no floor, only negotiation, so the accepted set is whatever ChatGPT implements — and OpenAI publishes no list. Its own pages cite `2025-06-18`. |
+| 4 | How does an **MCP-only plugin target CHAT vs CODEX**? | [`cn-gpt-plugin/register.md`](./cn-gpt-plugin/register.md) | Surface targeting is documented only for a *bundled skill*, via `policy.products` in `agents/openai.yaml` — a file an MCP-only submission does not have. `plugins/reference` has `_meta.ui.visibility`, but that is model-vs-UI, not surface. |
+| 5 | OpenAI's **recommended icon dimension**, and whether one file may serve as both `logo` and `composerIcon` | [`shared/icons.md`](./shared/icons.md) | Only a 48×48 floor and a 4096×4096 ceiling are published, so the 512/1024 sizes in that file are engineering judgement. Both fields are required and validated independently, so one square PNG *should* satisfy every published rule — untested, and cheap to test by submitting. |
+| 6 | Does **any shipping host render `serverInfo.icons`**? | [`shared/icons.md`](./shared/icons.md) | Narrowed, not closed: `Icon` first exists in the `2025-11-25` schema — the `2025-06-18` schema has no such type at all — and hosts today commonly negotiate `2024-11-05` or `2025-06-18`, where the field has nowhere to live. Treat it as inert until a host both negotiates 2025-11-25 and documents rendering. |
+
+Four of the six are OpenAI questions, and that is not a coincidence: `developers.openai.com` is fetchable and generally good, but `help.openai.com` now sits behind a Cloudflare bot challenge that refuses `curl` and real headless Chromium alike (re-tested 2026-08-15). Anything only the help centre knows is currently out of reach from a server. See [`AGENTS.md`](./AGENTS.md) for what works instead.
+
+**Closing one is welcome.** The bar is a primary source or a reproducible observation — a vendor page, a schema file, a package's source, or "I submitted this and here is what happened". Replace the inline marker with the finding and the date, and delete the row here. A confident guess is worse than the open question, which is the whole reason these are visible.
+
 ## Reading this as an agent
 
 [`AGENTS.md`](./AGENTS.md) has the full file map, per-goal reading order, and the invariants your output must not break.
