@@ -1,6 +1,6 @@
 # register.md — your own MCP server, your own ChatGPT
 
-**Scope:** PATH A only — ChatGPT **developer mode**. Connecting an already-deployed MCP server so *you* (and optionally your workspace) can call it. Nothing here makes it installable by strangers; that is [`publish.md`](./publish.md).
+**Scope:** ChatGPT **developer mode** — connecting and testing an already-deployed MCP server for yourself/workspace. Reusable packaging is [`package.md`](./package.md); public review is [`publish.md`](./publish.md).
 **Assumes:** the server answers JSON-RPC over public HTTPS at a stable URL ending in `/mcp`, and you have read [`../cn-mcp-core/README.md`](../cn-mcp-core/README.md).
 
 ## Do this in order
@@ -12,6 +12,7 @@
 5. Under **Connection**, either enter the MCP server URL **including the `/mcp` path**, or select **Tunnel** and pick a tunnel / enter its `tunnel_id`.
 6. Create the connection, then review the tools and metadata ChatGPT discovered.
 7. The draft lands under **Drafts** in app settings. Test it (see below).
+8. Copy the connection's real technical id (`plugin_asdk_app…`) only after the live flow works; use it in [`package.md`](./package.md) when a reusable bundle is needed.
 
 ## Gate 1 — auth. Read before anything else
 
@@ -26,7 +27,7 @@ The form offers exactly: **OAuth, No Authentication, and Mixed Authentication** 
 | Genuinely public, read-only tools | **No Authentication** | Works. Only if leaking every tool result to anyone who finds the URL is fine. |
 | Public discovery + authenticated tools | **Mixed Authentication** | `initialize` and list-tools run unauthenticated; each tool uses OAuth or no auth per its own `securitySchemes`. |
 
-For OAuth: "if static credentials are provided, then they will be used. Otherwise, ChatGPT can use Client ID Metadata Documents when the authorization server advertises support… ChatGPT can also use DCR when configured." "Static credentials" means an OAuth client ID and secret you supply, so there are three routes in ChatGPT's own order of preference: **static → CIMD → DCR**. CIMD supports `none` and `private_key_jwt` token-endpoint auth. Redirect URI is `https://chatgpt.com/connector/oauth/{callback_id}`.
+For OAuth, prefer Client ID Metadata Documents (CIMD) when the authorization server/client setup supports them; keep DCR for compatible hosts and use a pre-defined/static OAuth client only when the workspace/form explicitly supplies one. Whichever path is used, the authorization request and token must remain bound to the exact protected `resource`, issuer and redirect URI. Redirect URI is `https://chatgpt.com/connector/oauth/{callback_id}`.
 
 **Where you pick it is unclear, and the two OpenAI pages disagree.** [connect-chatgpt](https://developers.openai.com/plugins/deploy/connect-chatgpt.md) walks the modal in six steps and names no auth step at all; the help centre's own configure list has *"Pick the authentication mechanism, if applicable."* between providing the endpoint and clicking Scan Tools. Expect a selector, but be ready for auth to be discovered from the server instead.
 
@@ -77,7 +78,11 @@ Full per-host comparison: [`../shared/clients.md`](../shared/clients.md). If a t
 - **Confirmations:** "Write actions by default require confirmation… We respect the `readOnlyHint` tool annotation… **Tools without this hint are treated as write actions.**" Annotate properly ([`../shared/tool-design.md`](../shared/tool-design.md)) or every read prompts.
 - **After you redeploy:** open the connection at `https://chatgpt.com/plugins` → **Refresh** → confirm the advertised metadata changed → start a *new* conversation and re-test. Dev mode also lets you toggle individual tools on/off.
 - **Raw debugging:** `https://platform.openai.com/playground` → Tools → Add → MCP Server → enter the HTTPS endpoint and inspect request/response.
-- The connection's technical ID is in the browser URL and starts with `plugin_asdk_app`. Keep it — the built-in `@plugin-creator` skill takes it when you later scaffold for [`publish.md`](./publish.md).
+- The connection's technical ID is in the browser URL and starts with `plugin_asdk_app`. Keep the exact value. Use [`package.md`](./package.md) to map it into `.app.json`; never invent or commit a placeholder id.
+
+## Package the verified connection only when distribution needs it
+
+A successful developer-mode connection is enough for personal use. A repository/local plugin bundle is a separate step: `.codex-plugin/plugin.json`, a real `.app.json` mapping the connection id, and optional skills/assets/local MCP config. Follow [`package.md`](./package.md); do not hand-copy fragments from the public-submission form.
 
 ## Private servers: Secure MCP Tunnel
 

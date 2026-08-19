@@ -1,69 +1,198 @@
-# Results — what a tool hands back
+# Results — one payload, two representations, one declared contract
 
-**Scope:** the shape of `tools/call` results — text content, `structuredContent`, when declaring an `outputSchema` is a downgrade, and the `isError` rule.
-**Assumes:** you have tools that run. What they should be *named* and how granular they should be is [`tool-design.md`](./tool-design.md).
+**Scope:** production `tools/call` results — text content, `structuredContent`, exact `outputSchema`, errors, private `_meta`, files/images and response-size bounds.
+**Assumes:** you have tools that run. What they should be named and how granular they should be is [`tool-design.md`](./tool-design.md).
 
-## Two encodings of the same thing
+## The safe default
 
-A result carries `content` — an array, in practice one text block — and, since protocol revision **2025-06-18**, may also carry `structuredContent`.
+Return functionally equivalent text and structured data from one normalized payload:
 
 ```ts
-{
-  content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+const payload = { item, found: item !== null };
+
+return {
+  content: [{ type: "text", text: renderForModel(payload) }],
   structuredContent: payload,
   isError: false,
+};
+```
+
+The text is readable by every host and by the model. `structuredContent` lets the host or a linked UI consume data without scraping prose. Build both from the same value; two independently assembled representations eventually disagree.
+
+## Current OpenAI contract: schema and structured content travel together
+
+When a tool returns `structuredContent`, declare an `outputSchema` describing its **exact JSON object shape**. OpenAI validates the pair. Treat the schema as a public API contract, not decorative documentation.
+
+```ts
+const outputSchema = {
+  type: "object",
+  properties: {
+    found: { type: "boolean" },
+    item: {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            title: { type: "string" },
+          },
+          required: ["id", "title"],
+          additionalProperties: false,
+        },
+        { type: "null" },
+      ],
+    },
+  },
+  required: ["found", "item"],
+  additionalProperties: false,
+};
+```
+
+Keep the schema inline and plain. Some runtimes reject `$schema`, `$defs` or `$ref` keys at a data boundary even though they are legal JSON Schema keywords; [`convex.md`](./convex.md) documents that backend-specific trap.
+
+## Make every success an object envelope
+
+Legacy MCP revisions define `structuredContent` as an object, while the stateless 2026 era permits broader JSON values. An object envelope works in both eras and avoids per-version result reshaping.
+
+Use:
+
+```text
+scalar       → { result: 42 }
+string       → { result: "done" }
+array        → { items: [...], total: N }
+not found    → { found: false, item: null }
+empty list   → { items: [], nextCursor: null, total: 0 }
+write ack    → { ok: true, id: "..." }
+```
+
+Do not return a bare array in `structuredContent` and an object in text. Normalize the handler's result first, then render both representations from it.
+
+## Text should optimize model comprehension
+
+Structured JSON is for machines; the text block is prompt context. It may be Markdown as long as it communicates the same facts:
+
+```ts
+function renderForModel(value: ListResult): string {
+  if (value.items.length === 0) return `No posts found. Total: ${value.total}.`;
+  return [
+    `## Posts (${value.total})`,
+    ...value.items.map((item) => `- **${item.title}** · \`${item.id}\``),
+    value.nextCursor ? `Next cursor: \`${value.nextCursor}\`` : "End of list.",
+  ].join("\n");
 }
 ```
 
-Send **both**. The text block is what every shipping client reads today and what the model actually consumes; `structuredContent` is what a client can act on without parsing prose. The spec says as much: a tool returning structured content SHOULD also return functionally equivalent unstructured content, for backward compatibility.
+Always include identifiers required for the next call. “Markdown instead of JSON” must never become “prose without ids, counts or cursors.”
 
-**Emit the same object reference in both**, as above. The moment you build the text from one value and the structured field from another, they can disagree, and nothing will ever tell you — the model reads one, your UI reads the other, and they quietly describe different states.
+## Pagination must be honest
 
-## `structuredContent` must be a JSON object
+A bounded list result carries:
 
-At 2025-06-18 and 2025-11-25 it is defined as an object. Not an array, not a string, not `null`. (2026-07-28 loosened this to any JSON value, but you are almost certainly negotiating an earlier revision — see [`versioning.md`](./versioning.md).)
-
-Two consequences:
-
-**A list tool must already return an envelope.** `{ items: [...], total }`, not a bare array. If your handlers return bare arrays, that is a reason to fix the handlers, not to wrap only inside `structuredContent` — wrapping in one place and not the other reintroduces exactly the disagreement above.
-
-**A read that finds nothing has no representation.** A `get` returning bare `null` for a missing or foreign record — the normal anti-enumeration answer — simply carries no `structuredContent` on that call. Omitting it is legal, and the text block still says `null`. That is fine, *provided you did not declare an output schema.*
-
-```ts
-const isPlainObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
-...(isPlainObject(payload) ? { structuredContent: payload } : {})
+```json
+{
+  "items": [],
+  "nextCursor": null,
+  "total": 0,
+  "truncated": false
+}
 ```
 
-## Declaring `outputSchema` is a one-way door
+If you cannot compute a total cheaply, use another explicit signal such as `hasMore`. Never silently slice 300 records to 30 and let the model report that 30 is everything.
 
-It reads like an additive improvement. It is not.
+Input, handler and result names must match exactly. A result returning `nextCursor` while the input accepts no `cursor` is a one-page API wearing pagination metadata.
 
-The spec leaves one question open — does declaring a schema oblige you to return structured content on *every* success? — and **the reference TypeScript SDK resolves it strictly: the client throws when a declaring tool returns a success without `structuredContent`.**
+## `isError` is not JSON-RPC `error`
 
-So the moment you declare a schema on a read tool, the "record does not exist yet" branch stops being an answer the model can relay and becomes a client-side exception. For anything a new account has not created yet, that branch is not an edge case — it is the **first thing every new user hits**.
+A tool that was successfully addressed and then failed returns a normal JSON-RPC **result**:
 
-Declare one only where **every** success has a structured value. In practice that is narrower than it sounds, and the honest default for a large tool surface is to declare none, emit `structuredContent` everywhere it is free, and revisit if a consumer ever asks for validation.
+```json
+{
+  "content": [
+    { "type": "text", "text": "DEVICE_OFFLINE: Start the paired workstation and retry." }
+  ],
+  "isError": true
+}
+```
 
-The rest of the cost, once declared:
+Use the JSON-RPC `error` envelope for protocol/dispatch failures: malformed JSON, unknown RPC method, unknown tool, invalid params, unsupported protocol version and transport-header mismatch.
 
-- Adding a key stays additive only while the schema is open; removing or retyping one is breaking. See [`versioning.md`](./versioning.md).
-- Handlers usually return `unknown`, so nothing checks a schema against what the code actually returns. The schemas rot silently and the first symptom is a client throwing.
-- On some backends a `$`-prefixed key anywhere in a descriptor is fatal to `tools/list` — see [`convex.md`](./convex.md) §11. Inline everything; no `$defs`, no `$ref`, no `$schema`.
+The important behavioral reason: the model can read a tool result and explain it. Hosts often terminate or hide a protocol error.
 
-## Payload size is a real cost
+Authorization is the deliberate exception. Missing/insufficient authorization must also carry the HTTP status and `WWW-Authenticate` metadata the client needs to reconnect; see [`oauth.md`](./oauth.md).
 
-Both encodings ship on every successful call, so a result roughly doubles on the wire, and on hosts that surface both to the model it doubles in context too. That is fine for an ack and expensive for an unbounded list.
+## Private `_meta` for host/UI data
 
-Bound your lists at the query, not at the serializer. A tool that reads a whole table and returns it is a bill and a truncated context, and it was already one before structured content existed.
+Tool-result `_meta` is delivered to the host/component and hidden from the model. Use it for data a linked UI needs but the model should not spend tokens on, such as:
 
-## `isError` is not the JSON-RPC `error` envelope
+- pagination implementation details not needed for the next call;
+- UI lookup tables;
+- short-lived component state;
+- a namespaced resource version.
 
-A tool that ran and failed returns a **successful** JSON-RPC result carrying `isError: true` and readable text. Only the transport and dispatch layer — unparseable body, unknown method, unknown tool, bad arguments — uses the `error` envelope.
+It is **not a secret channel**. The third-party host still receives it. Never put access tokens, raw credentials or long-lived signed URLs there.
 
-The reason is behavioural, not stylistic: hosts hide protocol errors from the user. A carefully written failure message put in the `error` envelope reaches nobody; the run just stops. In `result.isError` the model reads it, tells the user, and can retry.
+Namespace custom keys:
 
-The one deliberate exception is authorization. An insufficient-scope refusal belongs in the `error` envelope with a real 403 and an RFC 6750 challenge, because the client — not the model — is what has to act on it ([`oauth.md`](./oauth.md#the-half-that-gets-skipped-actually-checking-it)).
+```json
+{
+  "_meta": {
+    "com.example.widget/stateVersion": "3"
+  }
+}
+```
 
-## Never return, in either encoding
+## Files and images
 
-Storage ids, internal row ids you do not want quoted back, tokens, signed URLs with a long life, raw email or IP. Everything here lands in a third party's transcript and stays there. If a tool must hand back a file, return a short-lived signed URL and say in the description that it expires — [`file-inputs.md`](./file-inputs.md).
+For a generated file:
+
+- return a gateway-controlled reference or short-lived HTTPS URL, never an absolute local path;
+- include a safe basename, MIME type, byte size and expiry;
+- cap downloads and lifetime;
+- do not embed unbounded base64 into an ordinary result.
+
+Inline image blocks are useful when the host supports them, but they raise response-size limits quickly. Review individual rich tools and give only those tools a higher bounded envelope; keep the default result limit small. A screenshot tool may justify several MiB. A `list_users` tool does not.
+
+Input-side file handling and SSRF/size guards are in [`file-inputs.md`](./file-inputs.md).
+
+## Size budget
+
+Every successful structured result may ship twice: readable text plus structured data. Bound at the query and at the transport:
+
+- list limit and cursor in the input schema;
+- database query bound, not serializer truncation;
+- maximum serialized result size;
+- stricter default, explicitly reviewed exceptions;
+- cancellation/timeout while streaming;
+- no redirect-following when credentials could be replayed to another host.
+
+When a result is too large, fail explicitly. A silently truncated JSON object can be valid JSON describing invalid state.
+
+## Never return
+
+- access, refresh, device or connector credentials;
+- authorization headers or upstream error bodies that may echo them;
+- local filesystem paths;
+- internal row ids that the model has no legitimate reason to quote back;
+- raw email, IP, trace/session identifiers or logs unless the tool's stated purpose and privacy policy require them;
+- long-lived signed URLs;
+- caller-supplied HTML/Markdown rendered without sanitization in a linked UI.
+
+Redact in the shared execution pipeline so REST, MCP and future SDK surfaces cannot disagree about what leaks.
+
+## Contract tests
+
+- every descriptor with `structuredContent` declares the exact object `outputSchema`;
+- success fixtures validate against that schema;
+- text and structured data are derived from the same normalized payload;
+- null, empty-list, scalar and write-ack branches all remain object envelopes;
+- `isError` failures do not become JSON-RPC protocol errors;
+- credentials and absolute paths are absent from text, structured data, files and `_meta`;
+- large ordinary results fail at the default cap;
+- explicitly reviewed rich results remain below their hard ceiling;
+- file refs expire and contain no local path.
+
+## Primary sources
+
+- OpenAI tool descriptor and result reference: <https://developers.openai.com/plugins/reference>
+- OpenAI MCP server guide: <https://developers.openai.com/plugins/build/mcp-server>
+- MCP tools result schema: <https://modelcontextprotocol.io/specification/2025-11-25/server/tools>

@@ -122,7 +122,7 @@ Serve items 1, 2 and 4 from the MCP endpoint's origin. Declare them strongest-gu
 
 `MCP_ORIGIN` is the host serving `POST /mcp`, not your marketing site. `.codex-plugin/plugin.json` then gets `"composerIcon": "./assets/icon-512.png"`, `"logo": "./assets/logo-1024.png"`, `"brandColor": "#RRGGBB"`. `.claude-plugin/plugin.json` gets nothing. `TODO: verify` — whether any shipping host actually **renders** `serverInfo.icons` today. No fetched doc says claude.ai, ChatGPT, Cursor or Cline consumes the field, and OpenAI's MCP pages never mention icons at all.
 
-One deduction narrows it hard, though it is not a substitute for testing: `Icon` first exists in the **2025-11-25** schema, and hosts today commonly negotiate `2024-11-05` or `2025-06-18`, where the field has no place in the type at all. Until a host both negotiates 2025-11-25 *and* documents rendering, treat `serverInfo.icons` as inert. Ship the manifest assets regardless — those are enforced at submission.
+One deduction narrows it hard, though it is not a substitute for testing: `Icon` first exists in the **2025-11-25** schema. A connection that negotiates `2024-11-05` or `2025-06-18` has no place for the field in its protocol type. Treat `serverInfo.icons` as inert on those revisions, and unverified on newer ones until the host documents rendering. Ship the manifest assets regardless — those are enforced at submission.
 
 ## How it fails
 

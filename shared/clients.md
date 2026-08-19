@@ -7,7 +7,7 @@ Your server does not change per host. What changes is **registration** and, for 
 
 | Host | Transport it accepts | Client registration | Notes |
 |---|---|---|---|
-| **ChatGPT** (apps / connectors) | remote HTTPS **only** | DCR, CIMD **or** a user-defined client — you pick in the form | No API-key field anywhere. OAuth is mandatory, not a choice. |
+| **ChatGPT** (plugins / MCP connections) | remote HTTPS **only** | CIMD preferred where available; DCR or pre-defined client also supported | No arbitrary API-key/custom-header field. Private tools need OAuth. |
 | **Claude.ai** (web connectors) | remote HTTPS | expects **RFC 7591 DCR** | Advertise `registration_endpoint` or it cannot self-register. |
 | **Claude Code / Claude Desktop** | remote HTTPS, or stdio via `mcp-remote` | DCR when remote | Desktop config takes a JSON snippet — ship it in your setup card. |
 | **Cursor** | remote HTTPS (streamable) | expects DCR | Also happy with a bearer in a config header. |
@@ -33,16 +33,23 @@ curl -sS https://MCP_ORIGIN/.well-known/oauth-authorization-server
 
 Read what comes back rather than assuming: `authorization_servers[0]` is frequently **not** the same host as `authorization_endpoint`. A server whose consent page is a frontend route and whose registration endpoint is a backend route will legitimately name two different origins, and someone "fixing" that mismatch by hand breaks a working connector.
 
-## Claude.ai / Cursor — add DCR
+## Client registration — prefer CIMD, keep DCR compatibility
 
-They register themselves. You need `POST /oauth/register` (RFC 7591) and `registration_endpoint` in your AS metadata:
+OpenAI recommends Client ID Metadata Documents (CIMD); several other hosts still rely on RFC 7591 DCR. Implement the client mode your target hosts actually use, and keep DCR compatibility when needed. For DCR, expose `POST /oauth/register` and `registration_endpoint`:
 
-- accept https-only `redirect_uris` (localhost allowed for dev)
-- dedupe on an identical redirect-URI set instead of minting a new client every time
-- cap the list (~8) per client
+- accept `application_type: web | native` only
+- require HTTPS redirects for web clients; allow reviewed native loopback/private schemes
+- exact-match and cap the redirect list
+- bind the client id to the authorization-server issuer
+- optionally dedupe identical safe registrations when it does not blur client identity
 - registration is safe to leave open **only because** a registered client is inert until a human approves it on your consent page — say so in a comment, or the next reader will "fix" it
 
 Return structured errors. A redacted backend message ("Server Error" plus a request id) tells the client nothing and leaks your internals into a public endpoint.
+
+
+## Protocol-era support is a server choice
+
+Hosts do not require separate business APIs for legacy and stateless MCP. Keep one endpoint and one dispatcher; negotiate initialize-based revisions and add `2026-07-28` through [`modern-protocol.md`](./modern-protocol.md). OpenAI does not publish a definitive ChatGPT revision allowlist, so prove the endpoint with Inspector and the actual host rather than inferring support from a version number alone.
 
 ## Approval / "always allow"
 

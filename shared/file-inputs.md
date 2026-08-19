@@ -1,8 +1,8 @@
 # Files and images, both directions
 
 **Scope:** getting a file *into* a tool (ChatGPT's file-param contract, the fetch, the guards, where the bytes live) and getting an image *out* of one.
-**Implementation:** [`../packages/mcp-files/`](../packages/mcp-files/README.md) ships this contract as code — schema builders, the guards below, and the adapter seams. Prefer it to hand-rolling.
 **Assumes:** a working server per [`../cn-mcp-core/`](../cn-mcp-core/README.md). Everything here is additive — a text-only server needs none of it.
+**Implementation:** [`../packages/mcp-files/`](../packages/mcp-files/README.md) ships this contract as code — schema builders, the guards below, and the adapter seams. Prefer it to hand-rolling.
 
 The use case that drives this: a user generates a poster in ChatGPT and wants it on their site. The model cannot hand you bytes — tool arguments are JSON, and no model reliably emits a megabyte of base64. So the transfer is **by reference**: the host gives you a short-lived URL and your server fetches it.
 
@@ -45,6 +45,8 @@ All four declared; only the first two required; requiring either optional one is
 ```json
 {
   "name": "upload_image",
+  "title": "Upload image",
+  "description": "Store one image after the target and purpose are known.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -64,13 +66,33 @@ All four declared; only the first two required; requiring either optional one is
     "required": ["file"],
     "additionalProperties": false
   },
-  "_meta": { "openai/fileParams": ["file"] }
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "ok": { "type": "boolean" },
+      "mediaId": { "type": "string" },
+      "url": { "type": "string" }
+    },
+    "required": ["ok", "mediaId", "url"],
+    "additionalProperties": false
+  },
+  "securitySchemes": [{ "type": "oauth2", "scopes": ["mcp.write"] }],
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  },
+  "_meta": {
+    "openai/fileParams": ["file"],
+    "securitySchemes": [{ "type": "oauth2", "scopes": ["mcp.write"] }]
+  }
 }
 ```
 
 **Inlined, not `$defs` + `$ref`.** OpenAI's published example uses `$defs`; that form is equivalent JSON Schema but it is fatal on Convex, which refuses any key starting with `$` and takes all of `tools/list` down with it — [`convex.md`](./convex.md) #11. Inlining costs nothing and works everywhere.
 
-**This stays one host-agnostic tool.** `_meta` is inert metadata to every other client; Claude Code and Cursor simply see an object with a `download_url` field and can put any public image URL in it. Do not build a second tool for them.
+**This stays one host-agnostic tool.** OpenAI-specific file metadata is inert to clients that do not consume it; they still see the ordinary object schema. Keep `securitySchemes`, annotations and exact output contract aligned with [`tool-design.md`](./tool-design.md) and [`results.md`](./results.md) rather than building a second host-specific tool.
 
 ## Guards — the part that is actually yours
 
