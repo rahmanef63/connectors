@@ -1,42 +1,85 @@
-# cn-gpt-plugin — getting your MCP server into ChatGPT
+# cn-gpt-plugin — getting your MCP server into ChatGPT and Codex
 
-**Scope:** registering an already-built remote MCP server with ChatGPT — for yourself, and for everyone. Registration and distribution only; no server internals.
-**Assumes:** you already have a deployed MCP endpoint on public HTTPS, built per [`../cn-mcp-core/README.md`](../cn-mcp-core/README.md). Nothing in this folder changes a line of that server.
+**Scope:** registering, packaging and publicly distributing an already-built remote MCP server through OpenAI surfaces. No server business logic belongs here.
+**Assumes:** you already have one deployed HTTPS MCP endpoint built per [`../cn-mcp-core/README.md`](../cn-mcp-core/README.md).
 
 ## Pick the path first
 
-| You want | Read | What it costs |
+| You want | Read | Outcome |
 |---|---|---|
-| Your own server in your own ChatGPT | [`register.md`](./register.md) | minutes, no review |
-| Your team to use it | [`register.md`](./register.md), workspace-publish section | minutes, needs workspace admin |
-| Anyone to install it from the public directory | [`publish.md`](./publish.md) | identity + domain verification, tool scan, review of unstated length |
+| Your server in your own/workspace ChatGPT | [`register.md`](./register.md) | a hosted connection with OAuth and a technical `plugin_asdk_app…` id |
+| A reusable repo/local plugin bundle for ChatGPT/Codex | [`package.md`](./package.md) | `.codex-plugin/plugin.json` + real `.app.json`, optional skills/local MCP config |
+| Anyone to install it from the public directory | [`publish.md`](./publish.md) | identity/domain verification, reviewed scan and public listing |
 
-The two paths use the **same** server at the **same** URL. Do not build a second one for ChatGPT.
+The paths build on one another:
+
+```text
+working MCP server
+→ register and test the live connection
+→ package the real connection id when distribution needs a bundle
+→ submit a reviewed public version only when required
+```
+
+They use the **same server at the same URL**. Do not create another dispatcher for ChatGPT or Codex.
 
 ## Read this much, then stop
 
-| You are | Read |
+| Situation | Read |
 |---|---|
-| Anyone | this file (~2 min), then the one path row above |
-| Blocked on "where do I paste my API key?" | the gate below, then [`register.md`](./register.md) |
-| Missing the OAuth half the form demands | [`../shared/oauth.md`](../shared/oauth.md) |
-| Comparing hosts before committing | [`../shared/clients.md`](../shared/clients.md) |
-| Unsure your endpoint shape is acceptable | [`../shared/transport.md`](../shared/transport.md) |
-| Writing tool names/descriptions/annotations | [`../shared/tool-design.md`](../shared/tool-design.md) — review reads these, so does the model |
-| Debugging a failed connection | [`../shared/pitfalls.md`](../shared/pitfalls.md) |
-| About to expose it | [`../shared/security-checklist.md`](../shared/security-checklist.md) |
-| On Convex | [`../shared/convex.md`](../shared/convex.md) |
+| Auth form has nowhere to paste an API key | the gate below → [`../shared/oauth.md`](../shared/oauth.md) |
+| Endpoint shape/version uncertain | [`../shared/transport.md`](../shared/transport.md) + [`../shared/modern-protocol.md`](../shared/modern-protocol.md) |
+| Tool metadata/annotations need work | [`../shared/tool-design.md`](../shared/tool-design.md) + [`../shared/results.md`](../shared/results.md) |
+| Personal/workspace connection | [`register.md`](./register.md) |
+| Repository/local installable package | [`package.md`](./package.md) |
+| Public directory | [`publish.md`](./publish.md) |
+| Failed connection/review | [`../shared/pitfalls.md`](../shared/pitfalls.md) |
+| About to expose or ship | [`../shared/security-checklist.md`](../shared/security-checklist.md) |
 
-## The one gate that stops most people
+## The gate that stops most builds
 
-ChatGPT's connection form offers exactly three auth modes — **OAuth**, **No Authentication**, **Mixed Authentication** ([developer-mode.md](https://developers.openai.com/api/docs/guides/developer-mode.md)). There is no API-key field and no custom-header field, and the docs are explicit that ChatGPT "cannot present custom API keys" ([build/auth.md](https://developers.openai.com/plugins/build/auth.md)). Claude Code, Cursor and `mcp-remote` all let you paste an arbitrary `Authorization:` or `X-Whatever:` header. **ChatGPT does not.** A bearer-only server is therefore registerable in ChatGPT only by dropping its own gate — which you should not do. If you want ChatGPT, you need [`../shared/oauth.md`](../shared/oauth.md) implemented first.
+ChatGPT supports OAuth, no authentication and mixed authentication for custom MCP connections. It does **not** present arbitrary custom API keys/headers on behalf of the user. A bearer-only private server therefore remains suitable for Claude Code/Cursor-style configured clients but is not ready for ChatGPT OAuth linking.
 
-## What ChatGPT calls this now
+Implement:
 
-OpenAI renamed the feature to **Plugins**. `https://developers.openai.com/apps-sdk` 301-redirects to `https://developers.openai.com/plugins` (verified with `curl -L`); there is no separate Apps SDK doc tree any more. A "plugin" is defined as skills, an MCP server, or both — `Plugin ├── Skills └── MCP server (optional)` ([concepts/plugins.md](https://developers.openai.com/plugins/concepts/plugins.md)) — and ChatGPT and Codex share one universal plugin directory. **This is a rename of the MCP feature, not a packaging format you must adopt.** Your server stays exactly what it was: one HTTPS JSON-RPC endpoint. Even the file named `.app.json` is described by OpenAI as "a compatibility identifier; the underlying primitive is the MCP server" ([build/plugins.md](https://developers.openai.com/plugins/build/plugins.md)).
+- RFC 9728 protected-resource discovery;
+- authorization-server metadata;
+- OAuth authorization code + PKCE S256;
+- exact `resource`/audience and issuer validation;
+- CIMD where supported, DCR for compatible hosts;
+- per-tool `securitySchemes` and runtime auth challenge metadata;
+- per-call scope enforcement.
 
-*History, for disambiguation only:* the 2023 ChatGPT plugin system built on `.well-known/ai-plugin.json` is dead and unrelated to any of this. It appears nowhere in the current doc tree. If a search result, a blog post or your own memory tells you to write an `ai-plugin.json`, that result is from the dead system — ignore it. It is not mentioned again anywhere in this folder.
+The complete recipe is [`../shared/oauth.md`](../shared/oauth.md).
 
-## Worked example
+## What “plugin” means now
 
-The worked example (Next.js + Convex) is cited throughout both files as a real server at Phase 1 — bearer only, its own source says so — and therefore as a real example of a server that **cannot** be registered in ChatGPT today without work. Its separate Custom GPT Actions surface under `GPTs/` is a different mechanism and is not covered here.
+OpenAI's current plugin model can contain:
+
+```text
+Plugin
+├── skills (optional)
+└── MCP connection/server (optional)
+```
+
+Registration creates the hosted connection. Packaging gives it a reusable plugin identity and optional workflows/assets. Public submission freezes and reviews a version of that metadata. The underlying application primitive remains your MCP server.
+
+The historical 2023 `.well-known/ai-plugin.json` system is unrelated. Do not resurrect it for this workflow.
+
+## Metadata quality is runtime quality
+
+Before registering or scanning, the live server should expose:
+
+- stable `name`, human `title`, focused description;
+- exact input and output schemas;
+- protocol and compatibility security schemes;
+- all four safety annotations;
+- short invocation status text;
+- deterministic per-user tool lists;
+- concise server instructions;
+- errors the model/client can act on.
+
+After any descriptor change, refresh/rescan and test in a new conversation. A host may keep a frozen snapshot even while tool calls reach the live server.
+
+## Worked example boundary
+
+The unnamed Next.js + Convex worked example cited elsewhere is intentionally Phase 1 bearer-only. It demonstrates a server that configured desktop/IDE clients can call, and why consumer-host OAuth must be added before ChatGPT registration. Its separate Custom GPT Actions surface is another mechanism covered by [`../cn-gpts/`](../cn-gpts/README.md).

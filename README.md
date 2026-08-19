@@ -3,7 +3,7 @@
 **Scope:** the router for this repo — one paragraph of thesis, then which folder to open for your situation.
 **Assumes:** you have a web app deployed on public HTTPS and you want an AI to call it. No prior MCP knowledge.
 
-Documentation you *read*, not software you install. Point Claude Code, Codex or Cursor at this repo, let it open the one folder that matches the job, and let it write the integration into your codebase. Nothing here runs.
+A cookbook you point Claude Code, Codex or Cursor at so it can open the smallest relevant guide and write the integration into another codebase. The Markdown is guidance; only `packages/` and the repository's validation scripts run.
 
 ## The thesis
 
@@ -67,7 +67,7 @@ Each folder's `README.md` is the orientation and the decision table; the files b
 
 - `cn-mcp-core/` — `phase-1-bearer.md` (the endpoint), `phase-2-oauth.md` (the authorization half), `phase-3-admin-ui.md` (token mint and revoke).
 - `cn-claude-plugin/` — `manifest.md` (`plugin.json` and packaging), `marketplace.md` (`marketplace.json`, install, catalog submission).
-- `cn-gpt-plugin/` — `register.md` (developer mode, no review), `publish.md` (public directory submission).
+- `cn-gpt-plugin/` — `register.md` (developer mode/live connection), `package.md` (reusable ChatGPT/Codex bundle), `publish.md` (public directory submission).
 - `cn-gpts/` — `openapi-actions.md` (the schema, the auth panel, the privacy-policy gate).
 
 ## Dependencies, stated plainly
@@ -78,7 +78,18 @@ Each folder's `README.md` is the orientation and the decision table; the files b
 
 ## shared
 
-Thirteen cross-cutting files, read alongside whichever folder you picked — tool design, per-host clients, transport, results, OAuth, Convex, the setup form, file and image inputs, icons, versioning, testing, pitfalls, the security gate. The "open when" table for all of them lives in [`shared/README.md`](./shared/README.md); pull single files from there on demand.
+Fourteen cross-cutting files, read alongside whichever folder you picked — tool design, per-host clients, legacy/modern transport, results, OAuth, Convex, the setup form, file and image inputs, icons, versioning, testing, pitfalls, and the security gate. The "open when" table lives in [`shared/README.md`](./shared/README.md); pull single files on demand.
+
+## Executable contract gates
+
+The cookbook itself now verifies what can drift mechanically:
+
+```bash
+node scripts/check-docs.mjs
+cd packages/mcp-files && npm ci --include=dev && npm run typecheck && npm test && npm run build
+```
+
+`.github/workflows/docs.yml` runs the same documentation/link/package gates on pushes and pull requests. This does not replace manual host acceptance; it prevents broken local links, stale router counts, accidental consumer artifacts, placeholder connection ids, and a regressed shared package from being merged unnoticed.
 
 ## Reference implementation
 
@@ -98,10 +109,10 @@ Six open questions, listed here rather than left buried inline. Every one is mar
 |---|---|---|---|
 | 1 | What does "**valid**" mean mechanically for a GPT Actions privacy-policy URL? | [`cn-gpts/openapi-actions.md`](./cn-gpts/openapi-actions.md) | Three help-centre pages say "valid" and none defines it. The *plugins* directory does publish its validator codes for the same field — `wrong_type`, `empty`, `format`, `too_long` — and every one is a **static** check that never fetches the URL. Different pipeline, so it settles nothing, but it points at well-formed rather than reachable. |
 | 2 | Can a **No Authentication** server exposing write tools pass OpenAI directory review? | [`cn-gpt-plugin/publish.md`](./cn-gpt-plugin/publish.md) | Review grades *disclosure*, not auth mode. Anthropic's directory does accept no-auth as one of three modes — different vendor, no read-across. |
-| 3 | Which **protocol revisions does ChatGPT accept**? | [`cn-gpt-plugin/register.md`](./cn-gpt-plugin/register.md) | The spec sets no floor, only negotiation, so the accepted set is whatever ChatGPT implements — and OpenAI publishes no list. Its own pages cite `2025-06-18`. |
+| 3 | Which **protocol revisions does ChatGPT accept**? | [`cn-gpt-plugin/register.md`](./cn-gpt-plugin/register.md) | OpenAI publishes transport support but no revision allowlist. MCP now has initialize-based and stateless `2026-07-28` eras, and the official SDK supports probe/fallback; that tells servers to dual-stack, not which revision ChatGPT currently chooses. |
 | 4 | How does an **MCP-only plugin target CHAT vs CODEX**? | [`cn-gpt-plugin/register.md`](./cn-gpt-plugin/register.md) | Surface targeting is documented only for a *bundled skill*, via `policy.products` in `agents/openai.yaml` — a file an MCP-only submission does not have. `plugins/reference` has `_meta.ui.visibility`, but that is model-vs-UI, not surface. |
 | 5 | OpenAI's **recommended icon dimension**, and whether one file may serve as both `logo` and `composerIcon` | [`shared/icons.md`](./shared/icons.md) | Only a 48×48 floor and a 4096×4096 ceiling are published, so the 512/1024 sizes in that file are engineering judgement. Both fields are required and validated independently, so one square PNG *should* satisfy every published rule — untested, and cheap to test by submitting. |
-| 6 | Does **any shipping host render `serverInfo.icons`**? | [`shared/icons.md`](./shared/icons.md) | Narrowed, not closed: `Icon` first exists in the `2025-11-25` schema — the `2025-06-18` schema has no such type at all — and hosts today commonly negotiate `2024-11-05` or `2025-06-18`, where the field has nowhere to live. Treat it as inert until a host both negotiates 2025-11-25 and documents rendering. |
+| 6 | Does **any shipping host render `serverInfo.icons`**? | [`shared/icons.md`](./shared/icons.md) | Narrowed, not closed: `Icon` first exists in the `2025-11-25` schema, while earlier revisions have no such type. Treat it as inert for a connection that negotiates an older revision, and unverified until a host documents rendering it. |
 
 Four of the six are OpenAI questions, and that is not a coincidence: `developers.openai.com` is fetchable and generally good, but `help.openai.com` now sits behind a Cloudflare bot challenge that refuses `curl` and real headless Chromium alike (re-tested 2026-08-15). Anything only the help centre knows is currently out of reach from a server. See [`AGENTS.md`](./AGENTS.md) for what works instead.
 
