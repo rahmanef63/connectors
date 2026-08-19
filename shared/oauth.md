@@ -1,129 +1,346 @@
 # OAuth 2.1 + PKCE for MCP
 
-**Scope:** the implementable OAuth 2.1 + PKCE S256 recipe — flow, the two digest-only tables, exchange ordering, routes, consent page, rate limits.
-**Assumes:** Phase 1 is live and you are targeting a host whose form exposes no credential field (ChatGPT, Claude.ai). Budget ~3 hours the first time.
+**Scope:** the production OAuth 2.1 + PKCE S256 recipe — discovery, protected-resource binding, client registration, consent, single-use codes, audience-bound tokens, per-call enforcement and rollout order.
+**Assumes:** Phase 1 is live and you are targeting a host whose form exposes no credential field (ChatGPT, Claude.ai). Budget several focused hours the first time; the security properties matter more than the route count.
 
-Those hosts require this; Cursor, Claude Code and `mcp-remote` do not — they take an arbitrary header from config.
+Those hosts require OAuth; Cursor, Claude Code and `mcp-remote` may also accept a manually configured bearer. OAuth changes **how a bearer becomes an authenticated caller**, not the tool registry or business dispatcher.
 
-## Flow
+## The identities and URLs you must not blur together
 
-```
-consent page (human approves)
-  → mint code: short TTL, PKCE S256 challenge stored, bound to client_id + redirect_uri
-  → client POSTs /oauth/token with code + code_verifier
-  → verify PKCE, delete the code row, mint access token
-  → token returned ONCE
-```
+Use explicit names in code:
 
-## Two tables, both digest-only
+| Name | Meaning | Example |
+|---|---|---|
+| `MCP_RESOURCE` | the exact protected resource named by RFC 9728; commonly the full MCP endpoint | `https://api.example.com/mcp` |
+| `AUTH_ISSUER` | the authorization server issuer | `https://api.example.com` |
+| `AUTHORIZATION_ENDPOINT` | the browser consent route; it may live on another frontend origin | `https://app.example.com/oauth/authorize` |
+| `TOKEN_ENDPOINT` | the machine-to-machine code exchange | `https://api.example.com/oauth/token` |
+| `REGISTRATION_ENDPOINT` | RFC 7591 dynamic client registration, when supported | `https://api.example.com/oauth/register` |
 
-**Auth codes** — `codeHash, codeChallenge, codeChallengeMethod, redirectUri, clientId, scope, userId, expiresAt`. Index by `codeHash`. TTL ≤5 min; 60s is plenty and shrinks the window on a captured redirect.
+A different consent-page host is fine. A token minted for a different `MCP_RESOURCE`, or by a different `AUTH_ISSUER`, is not.
 
-**Access tokens** — `tokenHash, userId, clientId, scope, expiresAt, createdAt, lastUsedAt, revokedAt, label`. Index by `tokenHash`.
+## Discovery starts from the 401
 
-Store **sha256 of both**. The raw code exists only in flight between the redirect and the exchange; the raw token is shown once at mint. Consequences worth stating out loud: a database dump holds no usable credential, and your admin list has nothing to redact — so drop the "token preview" column, it only ever existed because the raw value was in the row.
+A request without a usable bearer returns HTTP 401 plus the protected-resource pointer:
 
-## PKCE
-
-Helpers: `sha256Base64Url`, `randomHex`, `verifyPkce`. Base64url is `+→-`, `/→_`, strip `=` — standard base64 silently produces wrong challenges and you will chase it for an hour.
-
-- **S256 only.** Refuse `plain`.
-- **Verifier length 43..128** (RFC 7636 §4.1). Check it *before* hashing: a verifier outside that range can never be the one that produced the challenge.
-- Compare in constant time.
-
-## exchangeCode: delete before mint
-
-```
-find code row by sha256(code)     → miss? invalid_grant
-DELETE the row                     ← first, always
-expired / client mismatch / redirect mismatch / PKCE mismatch → invalid_grant
-insert token row (hashed)
-return { access_token, token_type: "Bearer", expires_in, scope }
+```http
+WWW-Authenticate: Bearer resource_metadata="https://MCP_ORIGIN/.well-known/oauth-protected-resource"
 ```
 
-Deleting first makes the code genuinely single-use: a replayed code lands on the "unknown code" branch and gets the same opaque error. A `consumed: true` flag also works but grows the table by one dead row per successful login, forever.
+Serve both public, CORS-open and cacheable:
 
-**Every failure returns the same opaque `invalid_grant`.** Distinguishing "unknown" from "expired" from "PKCE mismatch" only helps an attacker narrow down a captured flow. Keep the detail in server logs.
+### RFC 9728 protected-resource metadata
 
-## Scope — advertising it is the easy half
-
-If you advertise exactly one scope, **store the literal** — never echo back a narrower scope the client asked for. A client that requests `mcp.read` and is told it got `mcp.read` while holding full write is a lie your own audit log will repeat.
-
-### The half that gets skipped: actually checking it
-
-A scope that is published in discovery, requested at consent, and written onto the token row does **nothing** until something compares it against the tool being called. This is a real and common hole, not a hypothetical: a server can advertise `mcp.read`/`mcp.write`, show the user a consent screen naming them, store them on every token — and still let a read-only token call `delete`, because the dispatcher only ever checked *that a user resolved*. Everything looks right from the outside, including your own audit log, which faithfully records a scope nobody enforced.
-
-Check **per call**, in the dispatcher, before the handler runs:
-
-```ts
-if (!satisfiesScope(auth.scopes, tool.scope)) {
-  return { jsonrpc: "2.0", id, error: {
-    code: -32003,                       // implementation-defined range
-    message: `This token lacks ${tool.scope}, required by ${tool.name}.`,
-    data: { required_scope: tool.scope, granted_scopes: auth.scopes },
-  }};
+```json
+{
+  "resource": "MCP_RESOURCE",
+  "authorization_servers": ["AUTH_ISSUER"],
+  "bearer_methods_supported": ["header"],
+  "scopes_supported": ["mcp.read", "mcp.write"]
 }
 ```
 
-Three things make this cheap enough that there is no excuse:
+### RFC 8414 authorization-server metadata
 
-**Derive the scope, do not write it per tool.** You already declare `readOnlyHint` on every tool. The required scope follows from it:
+```json
+{
+  "issuer": "AUTH_ISSUER",
+  "authorization_endpoint": "AUTHORIZATION_ENDPOINT",
+  "token_endpoint": "TOKEN_ENDPOINT",
+  "registration_endpoint": "REGISTRATION_ENDPOINT",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code"],
+  "code_challenge_methods_supported": ["S256"],
+  "token_endpoint_auth_methods_supported": ["none"],
+  "authorization_response_iss_parameter_supported": true,
+  "scopes_supported": ["mcp.read", "mcp.write"]
+}
+```
+
+Pin every origin to trusted deployment configuration, never `Host` or `X-Forwarded-Host` from the request. Discovery documents are inputs to a client's trust decision.
+
+## Client identity: CIMD first, DCR for compatibility
+
+OpenAI recommends **Client ID Metadata Documents (CIMD)** for MCP clients. Keep RFC 7591 DCR when hosts you support still use it.
+
+### CIMD
+
+The client id is an HTTPS URL that resolves to the client's metadata document. At authorization time:
+
+1. fetch it over HTTPS;
+2. refuse redirects unless your policy deliberately allows and re-validates them;
+3. cap the response size and timeout;
+4. validate the document and exact redirect URI;
+5. cache briefly, but revalidate often enough that revocation matters.
+
+Do not accept an arbitrary URL as a client id and trust fields from it without SSRF, redirect and size guards.
+
+### DCR
+
+A DCR client row is inert until a signed-in human approves it. Store:
+
+```text
+clientId
+clientName             # self-reported
+redirectUris[]         # exact-match allowlist
+applicationType        # "web" | "native"
+issuer                 # AUTH_ISSUER that registered it
+createdAt
+lastUsedAt?
+```
+
+Requirements:
+
+- public client only; no client secret;
+- `token_endpoint_auth_method: "none"`;
+- `application_type` accepts only `web` or `native`;
+- `https` redirect URIs for web clients;
+- loopback HTTP and reviewed reverse-DNS private schemes only for native clients;
+- no fragments, userinfo or non-canonical URL spellings;
+- exact-string redirect matching, never prefix or subdomain matching;
+- bind the row to `AUTH_ISSUER`, so a client id minted by another issuer cannot be replayed here;
+- rate-limit registration and prune registrations that never complete a flow.
+
+## The authorization request carries the resource
+
+The browser request includes, at minimum:
+
+```text
+response_type=code
+client_id=...
+redirect_uri=...
+code_challenge=...
+code_challenge_method=S256
+resource=MCP_RESOURCE
+scope=mcp.read mcp.write
+state=...
+```
+
+Validate every field **before** rendering consent:
+
+- signed-in user comes from the session, never from a query parameter;
+- client exists and belongs to this issuer;
+- redirect URI is an exact member of the registered/validated client metadata;
+- `response_type` is `code`;
+- PKCE method is exactly `S256`;
+- challenge grammar is valid;
+- `resource` canonicalizes to exactly `MCP_RESOURCE`;
+- requested scopes are a supported subset;
+- repeated parameters are refused rather than resolved by first- or last-wins guessing;
+- `state` is bounded and echoed verbatim on success and denial.
+
+A malformed or unregistered redirect is a dead end on your page. Do **not** redirect to an untrusted `redirect_uri` merely to report the error; that is the open redirect.
+
+## The consent page is a security control
+
+Show:
+
+- the client name, labelled self-reported unless independently verified;
+- the exact destination host and redirect URI;
+- the exact protected resource;
+- what each requested scope permits;
+- whether writes may alter, send, publish, delete or revoke anything;
+- how the user revokes the grant later.
+
+The approve button should name the client. A vague “Continue” button beside a client name the user cannot place is how a technically valid OAuth flow becomes phishing UX.
+
+## Three digest-only records
+
+### Authorization codes
+
+```text
+codeHash
+codeChallenge
+clientId
+redirectUri
+resource
+issuer
+scopes[]
+userId
+expiresAt
+```
+
+Index by `codeHash`. TTL should be minutes, not hours. Store only SHA-256 of the raw code.
+
+### Opaque access tokens
+
+```text
+tokenHash
+userId
+clientId
+resourceAudience
+issuer
+scopes[]
+expiresAt
+createdAt
+lastUsedAt?
+revokedAt?
+label
+```
+
+Store only the digest. Return the raw token once. If your app already has a secure, expiring session/API-key table, an OAuth grant can be that same row with `clientId`, audience and scopes attached — one revocation path and one authenticator.
+
+### Clients
+
+Only needed for DCR or a local client registry. CIMD clients are validated from their metadata document instead of being minted by this endpoint.
+
+## PKCE S256
+
+- verifier length **43..128** from the RFC 7636 unreserved character set;
+- reject malformed verifiers before looking up a code, so a random short string cannot burn an honest user's code;
+- challenge = `base64url(sha256(verifier))` — `+→-`, `/→_`, strip `=`;
+- compare in constant time;
+- never accept `plain`.
+
+## Exchange ordering: burn the code, but do not let rollback revive it
+
+The token endpoint accepts **`application/x-www-form-urlencoded` only**. OAuth defines this request encoding; accepting JSON creates a second, non-standard parser and lets clients appear to work against a contract other OAuth implementations reject.
+
+```text
+validate grant_type, required fields and verifier grammar
+find row by sha256(code)           → miss? invalid_grant
+DELETE the row                     ← single-use from this point
+validate expiry, client, redirect, issuer, resource and PKCE
+mint access token bound to resource + issuer + scopes
+return token
+```
+
+There is one transactional trap: in databases where a thrown mutation rolls back all writes, **deleting and then throwing restores the code**. In that environment, return a typed refusal such as `{ok:false}` after the delete, let the transaction commit, and translate it to OAuth `invalid_grant` outside the transaction.
+
+Every grant rejection should look the same to the caller. Unknown code, expired code, wrong client, wrong redirect and wrong verifier all become:
+
+```json
+{
+  "error": "invalid_grant",
+  "error_description": "The authorization grant is invalid or expired."
+}
+```
+
+Keep diagnostic detail in redacted server logs.
+
+A presented `resource` that is malformed or names another audience fails as `invalid_target` **before** consuming the code when possible. At authorization and exchange, always compare the canonical exact value to `MCP_RESOURCE`.
+
+## Token response
+
+```json
+{
+  "access_token": "RETURNED_ONCE",
+  "token_type": "Bearer",
+  "expires_in": 7776000,
+  "scope": "mcp.read mcp.write"
+}
+```
+
+Headers:
+
+```http
+Cache-Control: no-store
+Pragma: no-cache
+Content-Type: application/json
+```
+
+Do not emit a refresh token unless you actually implement rotation, revocation and replay handling. A missing field is better than a decorative credential the client cannot use safely.
+
+## Authorization response issuer
+
+When you advertise RFC 9207 support, redirect with `iss=AUTH_ISSUER` on success and denial. The client uses it to detect authorization-server mix-up. Bind the code and client record to the same issuer and re-check it at exchange.
+
+## Verify the access token on every MCP request
+
+For an opaque token:
+
+1. hash the presented bearer;
+2. find the row;
+3. require active/not revoked;
+4. require `expiresAt > now`;
+5. require issuer exactly `AUTH_ISSUER`;
+6. require audience exactly `MCP_RESOURCE`;
+7. resolve the current user and tenant membership;
+8. enforce the required scope for the addressed tool.
+
+For a JWT, verify signature, `iss`, `aud`, `exp`, `nbf` and scopes with the same exactness. Parsing claims without validating them is not authentication.
+
+A bearer for `/mcp` must not automatically authorize unrelated REST routes. Audience binding is what stops a valid token from becoming a universal API key.
+
+## Scope: advertise, consent, store, enforce
+
+Derive the required scope from the same action metadata used for annotations:
 
 ```ts
-const scopeForTool = (t) => t.scope ?? (t.annotations.readOnlyHint === true ? READ : WRITE);
+const requiredScope = tool.requiredScope ??
+  (tool.annotations.readOnlyHint === true ? "mcp.read" : "mcp.write");
 ```
 
-Now a hundred tools are covered without touching a hundred files, and the scope can never contradict the annotation — they assert the same fact, and asserting the same fact twice is exactly how two things drift apart. Keep `t.scope` as an override for the rare tool whose authority genuinely differs from its hint.
+A write grant may imply read if your published scope semantics say so. A read grant never implies write.
 
-**Write implies read; read never implies write.** A client granted `mcp.write` that then cannot list is simply broken, and every real deployment behaves this way.
+Before the handler runs:
 
-**Answer with a real 403, not a 200 that says no.** RFC 6750 §3.1 — the challenge tells the client what to re-authorize *for*, which is what lets it recover instead of retrying forever:
-
-```
-HTTP/1.1 403 Forbidden
-WWW-Authenticate: Bearer realm="SERVER_NAME", error="insufficient_scope",
-  scope="mcp.write", resource_metadata="https://MCP_ORIGIN/.well-known/oauth-protected-resource"
+```ts
+if (!satisfiesScope(caller.scopes, requiredScope)) {
+  throw insufficientScope(requiredScope);
+}
 ```
 
-One carve-out: a **batch** stays 200, because a single status cannot describe a mixed array, and the per-entry JSON-RPC errors already carry the same detail.
+For the HTTP authorization failure, return 403 and a recoverable RFC 6750 challenge:
 
-**Before you turn enforcement on, look at the tokens you have already issued.** Every live token minted before this existed carries whatever scope string you were storing then. If that string is empty or narrower than what its owner actually uses, enforcement is a silent outage for them. Query the table first; it is a one-line check and the alternative is finding out from a user.
+```http
+WWW-Authenticate: Bearer error="insufficient_scope", scope="mcp.write", resource_metadata="https://MCP_ORIGIN/.well-known/oauth-protected-resource"
+```
 
-## Routes
+For OpenAI tool-level linking, the descriptor's `securitySchemes` and the runtime result `_meta["mcp/www_authenticate"]` are both required. The runtime challenge should include `error` and `error_description`; never put tokens or internal diagnostics in it.
 
-- `/oauth/authorize` — the consent page. Reads the signed-in user from your auth context; bounces to login when anonymous. On approve, calls the mint mutation and redirects to `redirect_uri?code=…&state=…`.
-- `/oauth/token` — accept **both** `application/x-www-form-urlencoded` and `application/json`. Validate `grant_type=authorization_code`. Return proper OAuth error codes. `Cache-Control: no-store`.
-- `/oauth/register` — RFC 7591 DCR, if you want Claude.ai / Cursor. See [`clients.md`](./clients.md).
-- `/.well-known/oauth-authorization-server` + `/.well-known/oauth-protected-resource` — see [`transport.md`](./transport.md).
+## Rate limits and lifecycle
 
-If your framework nests providers (Next.js app router), the consent route needs the **same auth providers** as the rest of the app or you get `useAuth must be used within AuthProvider`. Add a layout for the `/oauth` segment rather than hoisting the provider into the root layout — hoisting drags an auth websocket onto every marketing page.
+Use separate budgets for:
 
-## The consent page is a security control, not a formality
+- unauthenticated registration;
+- token exchange;
+- authorization-page abuse;
+- per-token MCP calls;
+- per-day write volume, not just per-minute burst.
 
-- Render the **destination host**, parsed from `redirect_uri`, as the primary trust signal.
-- The client's name is **self-reported** by whoever called `/oauth/register`. Show it, and label it as self-reported.
-- Enumerate what approval actually grants. If the token can write, say it can write, and name the surfaces. A consent screen that says "list your providers and view usage" while minting a token that can delete everything is the most common honest-looking lie in this whole design.
-- `redirect_uri` must be pre-registered for that client and https (localhost excepted for dev). Reject userinfo (`user:pass@host`) and fragments.
+Useful lifecycle rules:
 
-## Accepting more than one credential type
+- one live token per `(user, client)` if reconnect should replace the old grant;
+- reconnecting one client must not revoke another client's grant;
+- expired codes are swept in bounded batches;
+- never prune a client that has successfully completed a flow unless you have an explicit revocation/migration plan;
+- expose grants in a user-facing revoke screen.
 
-Extend your auth resolver to accept, in order:
+## Deployment order
 
-1. `MCP_API_KEY` env match → synthetic service account (skip entirely when the env var is unset)
-2. an existing session row
-3. an `oauthAccessTokens` row where not revoked and not expired → resolve the linked user
+When adding audience, issuer or new client metadata to a live system:
 
-The cleanest version of this: make an MCP bearer *be* a row in your existing session table with a long TTL and a label. Then your existing permission helpers gate MCP with no changes, every function that already takes a token works untouched, and revoking is the delete path you already have. One auth system, not two.
+1. deploy schema/control-plane support first, while fields remain optional for rolling compatibility;
+2. verify old gateway calls still work;
+3. deploy the gateway that starts sending and enforcing the new fields;
+4. verify discovery, DCR/CIMD, consent, token exchange and authenticated `tools/list` live;
+5. only then require the fields on newly issued grants;
+6. inspect existing tokens before enabling enforcement that would strand them.
 
-## Passing identity to your handlers
+Deploying the edge first can make it call backend mutations whose validators do not yet understand `resource`, `issuer` or `applicationType`.
 
-- **Node/Next** — `AsyncLocalStorage`: the route handler sets `{ token }` before dispatch, backend helpers read it. Beats threading a bearer through every function.
-- **Convex** — no ALS survives across mutation hops. Resolve `userId` from the bearer **once** in the route handler, then call internal mutations that take `userId` as an explicit arg and check ownership inline.
+## Contract tests
 
-## Rate limiting
+- 401 challenge points at a document the server really serves;
+- discovery origins are constants and contain the exact resource/scopes;
+- DCR accepts only supported application types and safe redirect URIs;
+- another issuer cannot reuse a client id;
+- anonymous callers cannot mint codes;
+- code, verifier, redirect, client, issuer and resource are all bound;
+- malformed verifier does not consume a code; a valid-shaped wrong verifier does;
+- failed post-lookup exchange commits the code deletion;
+- token endpoint rejects JSON and accepts form encoding;
+- token responses are non-cacheable;
+- another resource fails before minting a token;
+- issued token carries exact approved scopes and audience;
+- read-only token sees and calls no write tool;
+- reconnect replaces only the same `(user, client)` grant;
+- no refusal leaks the code, token or upstream exception.
 
-- per-minute burst per token
-- **per-day bucket too** — per-minute alone still permits ~172k calls/day, which is a real bill on any tool that fans out to an LLM
-- separate bucket per IP on the unauthenticated surfaces (`/oauth/register`, `/oauth/token`)
+## Primary sources
 
-Size the daily cap at roughly 10× your heaviest legitimate day, and log what you dropped.
+- OpenAI MCP authentication: <https://developers.openai.com/plugins/build/auth>
+- MCP authorization overview: <https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization>
+- MCP 2026 authorization changes: <https://blog.modelcontextprotocol.io/posts/2026-07-28/>
+- RFC 7636 (PKCE), RFC 8414 (authorization-server metadata), RFC 8707 (resource indicators), RFC 9207 (authorization response issuer), RFC 9728 (protected-resource metadata), RFC 7591 (dynamic registration)

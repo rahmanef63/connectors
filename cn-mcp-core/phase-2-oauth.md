@@ -1,54 +1,105 @@
 # Phase 2 — OAuth 2.1 + PKCE
 
-**Scope:** the authorization half — consent page, auth codes, token exchange, discovery documents.
-**Assumes:** Phase 1 is live and answering `initialize` over a bearer.
+**Scope:** the authorization half — protected-resource discovery, CIMD/DCR, consent, single-use codes, audience-bound tokens and rollout order.
+**Assumes:** Phase 1 is live and its bearer already resolves to a server-side caller identity. The MCP dispatcher and handlers remain unchanged.
 
-Full recipe in [`../shared/oauth.md`](../shared/oauth.md). The shape:
+The full implementation and attack matrix are in [`../shared/oauth.md`](../shared/oauth.md). Read that file before coding; this page is the phase boundary and sequence.
+
+## Flow
 
 ```mermaid
 sequenceDiagram
     participant C as AI client
-    participant B as User's browser
-    participant S as Your server
+    participant B as User browser
+    participant G as MCP/API origin
+    participant U as Consent UI
 
-    C->>S: POST /mcp (no token)
-    S-->>C: 401 + WWW-Authenticate<br/>carrying a resource_metadata pointer
-    C->>S: GET /.well-known/oauth-protected-resource
-    S-->>C: which authorization server to use
-    C->>S: GET /.well-known/oauth-authorization-server
-    S-->>C: endpoints, S256 only
-    opt no client_id yet
-        C->>S: POST /oauth/register (RFC 7591)
-        S-->>C: client_id
+    C->>G: POST /mcp without token
+    G-->>C: 401 + resource_metadata pointer
+    C->>G: GET protected-resource metadata
+    G-->>C: MCP_RESOURCE + AUTH_ISSUER + scopes
+    C->>G: GET authorization-server metadata
+    G-->>C: authorize/token + CIMD/DCR capability
+    opt DCR client
+        C->>G: POST /oauth/register
+        G-->>C: public client_id, no secret
     end
-    Note over C: generate verifier,<br/>challenge = S256(verifier)
-    C->>B: open /oauth/authorize?code_challenge=…
-    B->>S: user signs in and consents
-    S-->>B: redirect with ?code=…
-    Note over S: store sha256(code) + challenge,<br/>TTL <= 5 min
-    B-->>C: code
-    C->>S: POST /oauth/token<br/>code + code_verifier
-    Note over S: S256(verifier) == stored challenge?<br/>DELETE the code row
-    S-->>C: access token
-    C->>S: POST /mcp + Bearer
-    S-->>C: 200
+    Note over C: verifier=random, challenge=S256(verifier)
+    C->>U: /oauth/authorize + client + redirect + resource + scope + state
+    U->>U: authenticate user, validate client/issuer/redirect/resource, show consent
+    U-->>C: redirect with code + state + iss
+    C->>G: form POST /oauth/token + code + verifier + client + redirect + resource
+    G->>G: validate grammar, delete code, verify all bindings, mint audience-bound token
+    G-->>C: bearer + exact scopes, no-store
+    C->>G: POST /mcp + bearer
+    G->>G: verify issuer, audience, expiry, revocation, membership and tool scope
+    G-->>C: JSON-RPC result
 ```
 
-The 401 is not a failure — it is the discovery handshake starting. A client with no token is *supposed* to get one, read the `resource_metadata` pointer, and walk itself to your authorization server.
+The first 401 is the handshake starting, not the end of it.
 
-Two tables, **both storing only sha256**: auth codes (delete the row on exchange, never a `consumed` flag) and access tokens. Serve `/.well-known/oauth-protected-resource` (RFC 9728) and `/.well-known/oauth-authorization-server` (RFC 8414) — and see pitfall #12 in [`../shared/pitfalls.md`](../shared/pitfalls.md) for *where* they must live.
+## Records
 
-Nothing in the transport changes when OAuth lands. The endpoint, the dispatcher and the tool registry are identical; only the function that turns a bearer into a caller identity gains a second source.
+Store only digests of raw secrets:
 
-## Worked example — deliberately absent
+```text
+OAuth client (DCR only)
+- clientId, redirectUris[], applicationType, issuer, createdAt, lastUsedAt?
 
-The worked example does **not** implement OAuth. It has no consent page and no `/.well-known/*` routes: grepping `convex/` for `well-known` and `oauth` returns exactly one hit, and that hit is the comment below. `convex/http.ts:129` mounts the transport with `registerMcpRoutes(http)`; no authorization-server routes are registered anywhere in the file. The phase boundary is stated in the transport header, `convex/mcp/routes.ts:5-6`:
+Authorization code
+- codeHash, challenge, clientId, redirectUri, resource, issuer, scopes, userId, expiresAt
 
-```ts
-// Registered by convex/http.ts. Phase 1 = bearer only; OAuth 2.1 + PKCE is a
-// separate, later phase and nothing here needs to change when it lands.
+Opaque access token
+- tokenHash, userId, clientId, audience, issuer, scopes, expiresAt, revokedAt?
 ```
 
-That last clause is this page's claim, written by someone who had to live with it: when OAuth lands there, `routes.ts`, `jsonrpc.ts`, `tools.ts` and `handlers.ts` are untouched. Only `auth.ts` — the credential → caller-identity step — gains a second source.
+A CIMD client is validated from its HTTPS metadata document rather than minted locally.
 
-Next: [`phase-3-admin-ui.md`](./phase-3-admin-ui.md), then [`../shared/security-checklist.md`](../shared/security-checklist.md).
+## Load-bearing rules
+
+- PKCE S256 only; verifier 43..128 and valid grammar.
+- Exact redirect membership; never prefix matching.
+- Exact canonical `resource` at authorization, exchange and every MCP call.
+- Exact issuer binding for client, code and token; include/verify response `iss` when advertised.
+- Token endpoint is form-encoded, not JSON.
+- Code row is deleted before post-lookup validation.
+- On transactional rollback systems, return a refusal after delete rather than throw, so the delete commits.
+- All grant failures are one opaque `invalid_grant`; invalid audience is `invalid_target`.
+- Read/write scopes are enforced per tool before handler execution.
+- Tokens expire and have a user-visible revoke path.
+
+## Nothing below auth changes
+
+When OAuth lands, these stay the same:
+
+```text
+JSON-RPC parser
+protocol-era adapter
+catalog builder
+input validation
+policy / approval
+business handlers
+result normalization
+redaction / audit
+```
+
+Only the credential resolver gains another source. After OAuth resolution it returns the same normalized principal Phase 1 already uses.
+
+## Rollout order
+
+1. Add optional client/code/token schema fields and backend validators.
+2. Deploy the control plane/backend first.
+3. Verify the old bearer/gateway still works.
+4. Deploy discovery, consent, registration and token routes.
+5. Verify one complete live OAuth flow.
+6. Deploy/enforce exact audience, issuer and scopes at `/mcp`.
+7. Inspect/migrate or revoke older grants before making new fields mandatory globally.
+8. Register the endpoint in the target host only after discovery and live calls pass.
+
+Deploying a new edge first can send `resource`, `issuer` or `applicationType` into an older backend that rejects those fields.
+
+## Worked example boundary
+
+The worked example does **not** implement Phase 2. Its transport comments explicitly describe Phase 1 bearer-only. Use it for the dispatcher boundary, not as evidence that OAuth routes/discovery already exist.
+
+Next: [`phase-3-admin-ui.md`](./phase-3-admin-ui.md) for grant visibility/revocation, then [`../shared/testing.md`](../shared/testing.md) and [`../shared/security-checklist.md`](../shared/security-checklist.md).

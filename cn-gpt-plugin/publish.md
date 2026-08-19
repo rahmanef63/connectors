@@ -1,6 +1,6 @@
 # publish.md — the public directory submission
 
-**Scope:** PATH B only — submitting your MCP server to the **public Plugins Directory** so other people can install it. Path A (connecting the server to your own ChatGPT, no review) is [`register.md`](./register.md); if that is all you need, close this file.
+**Scope:** submitting a tested MCP connection/package to the **public Plugins Directory**. Live connection setup is [`register.md`](./register.md); reusable package structure is [`package.md`](./package.md).
 **Assumes:** the server already works end-to-end in developer mode per [`register.md`](./register.md), is reachable at a stable public HTTPS URL, and passes [`../shared/security-checklist.md`](../shared/security-checklist.md).
 
 Portal: `https://platform.openai.com/plugins` → **Create plugin** → **Skills only** or **With MCP** (use *With MCP*; it also covers MCP + skills). Form tabs: Info, MCP, Skills, Prompts, Testing, Global, Submit.
@@ -38,7 +38,7 @@ Calling a tool "functionally read-only" in prose while the server advertises `re
 ## Final-submission checklist
 
 - [ ] Production HTTPS MCP URL, domain challenge served, and a **successful, current** tool scan
-- [ ] `readOnlyHint`, `openWorldHint` **and** `destructiveHint` set on every tool, each with a written justification (`annotations_required`, `justification_required`)
+- [ ] All four annotations — `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` — set from real behavior, with the justifications the submission form requests
 - [ ] Positive and negative test cases — each positive one carries a user prompt, expected tool/skill behavior, expected result shape, and test account or fixture data; each negative one carries the scenario, the expected refusal/clarification/safe fallback, and why the plugin should not complete it
 - [ ] Demo credentials that work **without MFA, SMS, email confirmation, or private-network access** (required when the server uses OAuth)
 - [ ] A **demo-recording URL** showing the main use cases and tools across supported platforms (MCP-backed submissions)
@@ -50,7 +50,7 @@ Calling a tool "functionally read-only" in prose while the server advertises `re
 
 The portal never enumerates auth modes the way developer mode does. What it does demand for an MCP-backed submission: *"public MCP server URL, domain verification access, authentication details, demo credentials if needed, content security policy, and accurate tool metadata"*, and **reviewer credentials that work without MFA, email confirmation or SMS confirmation** — a login wall a human reviewer cannot pass is a rejection.
 
-Instead of gating on auth mode, review gates on **annotations, which are mandatory for every MCP tool**: `readOnlyHint`, `openWorldHint`, `destructiveHint`. Set `openWorldHint: true` for a write tool that can change publicly visible internet state, and `destructiveHint: true` for anything that deletes, overwrites, revokes access, or sends something irreversible.
+Instead of trusting prose, review reads the server annotations. Supply all four: `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. Set them from actual behavior; public/external interaction and irreversible deletion/overwrite/revocation/send effects must not be disguised to reduce confirmation.
 
 TODO: verify — whether a **No Authentication** server exposing write tools can pass directory review. Still unstated after sweeping the help centre as well as `developers.openai.com`; already searched, do not repeat. Three sourced facts bound the answer without settling it: review grades **disclosure, not auth mode** — *"if your server advertises `readOnlyHint: false`, describing the tool as 'functionally read-only' in the justification doesn't make the tool read-only"* ([app-review](https://developers.openai.com/plugins/deploy/app-review.md)); the submission checklist presumes auth may be absent — *"authentication details, demo credentials **if needed**"* ([submission](https://developers.openai.com/plugins/deploy/submission.md)); and ChatGPT keeps a runtime backstop regardless — *"Some especially risky actions may be blocked instead of being presented for approval"* ([help centre](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta)). None of that is permission. A write tool anyone who finds the URL can invoke is a design defect before it is a review question — [`../shared/security-checklist.md`](../shared/security-checklist.md).
 
@@ -75,11 +75,18 @@ Declare CSP as `_meta.ui.csp` on the resource contents: `connectDomains` (fetch/
 
 Nested frames are blocked by default. Adding `frameDomains` opts into iframes and "triggers stricter plugin review"; every external frame domain needs a written explanation (`frame_domain_explanation_required`), and such plugins "are often not approved for broad distribution". Keep allowlists narrow — review checks the declared policy against actual UI behavior.
 
-## Packaging (only when you bundle skills or distribute a plugin)
+## Packaging gate before submission
 
-The manifest is **`.codex-plugin/plugin.json`**. Only `plugin.json` goes inside `.codex-plugin/`; `skills/`, `hooks/`, `assets/`, `.mcp.json` and `.app.json` stay at the plugin root. Paths are relative to the root, start with `./`, and must stay inside it. `name` is kebab-case and stable — "Plugin hosts use it as the plugin identifier and component namespace." Keys: `name`, `version`, `description`, `author`, `homepage`, `repository`, `license`, `keywords`, `skills`, `mcpServers`, `apps`, `hooks`, and an `interface` block (`displayName`, `shortDescription`, `longDescription`, `developerName`, `category`, `capabilities`, `websiteURL`, `privacyPolicyURL`, `termsOfServiceURL`, `defaultPrompt`, `brandColor`, `composerIcon`, `logo`, `screenshots`). Scaffold it with the built-in `@plugin-creator` skill, fed the `plugin_asdk_app…` connection ID from [`register.md`](./register.md). Reference plugins: `https://github.com/openai/plugins/tree/main/plugins` (figma, notion, build-web-apps).
+Use [`package.md`](./package.md) as the single source of truth for `.codex-plugin/plugin.json`, `.app.json`, optional `.mcp.json`, skills, assets and repo marketplaces. Public submission adds stricter requirements on top:
 
-Coming from Claude: skills-only plugin → **Skills only**; remote MCP connector → **With MCP**; both → one **With MCP** submission. Local `stdio`-only servers are unsupported (expose public HTTP first), the portal **does not accept `.mcpb`**, and "Claude marketplace listings and approvals don't transfer". A `.claude-plugin/plugin.json` can stay for a direct Claude archive upload — "the portal converts it to `.codex-plugin/plugin.json`". `userConfig` / `${user_config.*}` is unsupported: credentials move to OAuth 2.1 on the remote server, and no secrets in the archive, manifest, instructions or defaults.
+- the `.app.json` id comes from the verified live connection, never a placeholder;
+- privacy/terms/support/listing assets are real and reviewed;
+- package paths resolve and contain no secret/user configuration;
+- the server descriptor scan matches the package claims;
+- Claude/OpenAI wrappers remain separate when both are shipped;
+- local `stdio`-only MCP is not a public remote-MCP submission.
+
+Run the package-contract tests from [`../shared/testing.md`](../shared/testing.md) and the final gate in [`../shared/security-checklist.md`](../shared/security-checklist.md) before uploading.
 
 ## Review, publish, and life afterwards
 
@@ -130,6 +137,6 @@ What has to change in the package:
 - `outputStyles`, `lspServers`, `channels`, `dependencies`, `experimental.*` — fold anything essential into skills, then delete the declaration.
 - Claude live artifacts are unsupported; return the content as ordinary conversation output.
 - `.claude-plugin/plugin.json` — keep it. The portal converts it to `.codex-plugin/plugin.json` and asks you to confirm normalized fields.
-- `.claude-plugin/marketplace.json`, `.mcp.json`, `mcpServers`, `.app.json` — carry no weight here. A skills-only upload excludes MCP and app configuration entirely.
+- `.claude-plugin/marketplace.json` does not transfer automatically. For the converted OpenAI package, deliberately rebuild hosted connection/local server mappings as `.app.json` / `.mcp.json` and reference them from `.codex-plugin/plugin.json` per [`package.md`](./package.md). A **skills-only** upload intentionally excludes both.
 
 For a direct Claude archive upload the root, or its single top-level directory, must hold `.claude-plugin/plugin.json` with a non-empty `description` and at least one valid skill at `skills/<skill-name>/SKILL.md`.

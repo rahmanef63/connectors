@@ -1,83 +1,235 @@
-# Testing — what breaks silently, and the cheapest thing that catches it
+# Testing — pin the contracts that otherwise drift silently
 
-**Scope:** what to assert about an MCP server, in rough order of value per line of test.
-**Assumes:** the server runs and you can call `tools/list`. Debugging a server that does not respond at all is [`cn-mcp-core/phase-1-bearer.md`](../cn-mcp-core/phase-1-bearer.md).
+**Scope:** the highest-value tests for an MCP server and plugin package — descriptors, results, both protocol eras, OAuth attack cases, golden prompts, package integrity and one live acceptance call.
+**Assumes:** the server runs and you can call `tools/list`. Debugging a server that does not answer is [`../cn-mcp-core/phase-1-bearer.md`](../cn-mcp-core/phase-1-bearer.md).
 
-## The problem is that nothing throws
+## Why ordinary coverage is not enough
 
-Ordinary bugs announce themselves. The failures specific to this surface do not:
+The failures unique to MCP often behave exactly as written:
 
-| What changed | What you see |
+| Drift | Symptom |
 |---|---|
-| a tool renamed | nothing — the model stops choosing it |
-| a description reworded | nothing — tool selection shifts across every conversation |
-| `destructiveHint` flipped to `false` | nothing — a host stops asking the human first |
-| a required scope widened | nothing until a live token calls it and gets 403 |
-| a descriptor that fails to serialize | on some backends, `tools/list` returns nothing at all |
-| `structuredContent` disagreeing with the text block | nothing — two readers see two states |
+| tool renamed | the model quietly stops choosing it |
+| description changed | selection shifts with no exception |
+| `destructiveHint` flipped | a host changes confirmation behavior |
+| scope widened | old tokens fail later at call time |
+| result no longer matches `outputSchema` | strict host throws after a successful handler |
+| modern header and body target differ | proxy and dispatcher can authorize different operations |
+| plugin path points nowhere | installation succeeds partially or fails in another host |
 
-None of these fail a typecheck, and most do not fail an integration test either, because the server is behaving exactly as written. Testing here means **pinning intent**, not exercising code paths.
+Testing here pins **intent and wire contracts**, not only code branches.
 
-## 1. Snapshot the catalog
+## 1. Snapshot the exact catalog
 
-The highest value per line in this whole file. Snapshot the exact `tools/list` payload and commit it.
+Extract one descriptor builder and call it from both the server and the test:
 
 ```ts
-it("matches the committed contract", () => {
+it("matches the reviewed tools/list contract", () => {
   expect(toolDescriptors()).toMatchSnapshot();
 });
 ```
 
-Two rules make it worth having:
+Review every snapshot diff. Regenerating automatically defeats the test.
 
-**Build the snapshot from the same function the server serves.** A test that rebuilds the descriptor mapping itself keeps passing while the wire format moves underneath it, which is worse than no test — it is a green light attached to nothing. Extract one `toolDescriptors()` and let both the dispatcher and the test call it.
+For dynamic catalogs, snapshot representative authorization contexts rather than one global list:
 
-**The value is entirely in reading the diff.** A rename, a reworded description, a flipped annotation all become a diff someone approves on purpose. A team that reflexively runs `-u` has bought nothing at all, so say that next to the test.
+```text
+read-only user
+write-enabled user
+user with no connection
+user with one online local device
+user after device/connection revocation
+```
 
-## 2. Assert the invariants a host acts on
+Assert deterministic order and, when emitted, a deterministic digest.
 
-Cheap, and they catch the class of bug that turns into a data-loss incident rather than an inconvenience.
+## 2. Descriptor invariants
 
-- every tool has all four annotations, and they are booleans — a missing hint defaults to the most cautious or the most permissive behaviour depending on the client, and neither is what you chose
-- **no write is annotated `readOnlyHint: true`** — that is the one that makes a host auto-approve without asking
-- every destructive tool requires the write scope
-- a read-only scope set can reach **no** destructive tool
-- names match your published convention, and are unique — two domains picking `documents_list` means one silently shadows the other in a name→tool map, and the loser is advertised to the model but dispatches to the winner
-- descriptions are non-empty and under any host's cap (OpenAI rejects a function description over 1024 characters, and the whole request fails, not just that tool)
-- no `$`-prefixed key anywhere in a descriptor ([`convex.md`](./convex.md) §11)
+Loop over the whole registry:
 
-Write these as loops over the registry, not per tool. One test covers however many tools you grow to.
+- unique, stable names following one convention;
+- non-empty `title` and task-oriented description;
+- closed and compilable object `inputSchema`;
+- all four annotations are booleans;
+- no write is `readOnlyHint: true`;
+- destructive tools require write authority;
+- `securitySchemes` and compatibility `_meta.securitySchemes` agree;
+- invocation-status strings remain within host limits;
+- every structured-success tool declares an exact object `outputSchema`;
+- no `$`-prefixed schema key crosses a backend that rejects it;
+- no secret, real deployment id or placeholder appears in metadata.
 
-## 3. Golden prompts
+One registry loop should protect every new tool automatically.
 
-The catalog can be internally perfect and still lead a model to the wrong tool. That is a real defect, and nothing above detects it.
+## 3. Result contract fixtures
 
-Keep a fixture of prompts with the tool each one should reach:
+Validate every success branch, not only the happy record:
 
-- **direct** — the user plainly asks for the thing
-- **indirect** — the user states a goal without naming the operation
-- **negative** — a realistic request that must call **no** tool at all
+```text
+record found
+record absent
+empty list
+next page present
+scalar/ack result
+generated file/image
+```
 
-Aim them at the pairs that are genuinely confusable — list vs get, create vs update, attach vs replace — because those are where wording actually decides the outcome. Write them in the language your users type in.
+For each fixture:
 
-Two tiers, and be honest about which you have:
+- validate `structuredContent` against `outputSchema`;
+- prove it is an object envelope;
+- prove the text contains functionally equivalent facts;
+- prove ids/cursors needed for the next call remain present;
+- prove credentials, local paths and internal diagnostics are absent;
+- prove ordinary results stay under the default size cap;
+- prove reviewed rich results stay under their separate hard ceiling.
 
-**Structural, free, runs in CI.** Every prompt names a tool that exists (this alone catches a rename), every tool has at least one direct prompt (a tool nobody wrote a way to reach is a tool nobody will reach), negatives expect nothing, no duplicates.
+Tool execution failures should return `isError: true`. Protocol failures should use JSON-RPC `error`. Keep a test that distinguishes them.
 
-**Behavioural, costs money, runs on demand.** Send each prompt plus the whole tool catalog to a model and compare the tool it calls. Three things decide whether the result is usable:
+## 4. Dual-era protocol matrix
 
-- **A setup failure is not an accuracy result.** A missing key, a 401, a 500 must fail the run loudly with the HTTP body attached. Score them as wrong answers and an unset environment variable reads as 0% accuracy, sending someone off to rewrite tool descriptions. Retry a 429 rather than counting it.
-- **Group misses by the confused pair, not by prompt.** Ten prompts all sliding from `x_get` to `x_list` is one wording bug, not ten.
-- **Know the bill before you start.** Every request carries the entire catalog, so cost scales with tools × prompts, not with prompts. Sixty-odd tools is roughly 20–25k input tokens *per prompt*. Start with a slice.
+Run the same normalized business call through every era you advertise.
 
-A fixture that no model ever reads is not an evaluation. If you only build the structural tier, say so where someone will read it, rather than letting the word "golden" imply more than it does.
+### Initialize-based cases
 
-## 4. One live call, before you call it done
+- each supported requested revision is echoed;
+- unknown/absent request falls back to the newest legacy revision you actually implement;
+- notifications return empty 202;
+- request arrays are accepted only for a revision that defined batching;
+- modern-only headers are not required.
 
-Not a test — a habit. Response-shape asymmetry survives every test above: the handler returns `{items, nextCursor}`, the dispatcher destructures `{results, cursor}`, TypeScript sees `any` on both sides, and the user gets a vague "validation error" from the model. Make one real call against the deployed endpoint and read the JSON.
+### Stateless cases
 
-## What not to bother with
+- `server/discover` advertises only implemented versions/capabilities;
+- body and `MCP-Protocol-Version` must match;
+- body method and `Mcp-Method` must match;
+- body target and `Mcp-Name` must match;
+- non-ASCII name sentinel is decoded exactly when supported;
+- missing client metadata/capabilities fails before dispatch;
+- unknown RPC returns HTTP 404 + JSON-RPC `-32601`;
+- unknown tool returns invalid params and never reaches a handler;
+- complete result carries server identity and cache hints;
+- a private per-user catalog never receives public cache scope.
 
-**Do not mock the protocol.** A hand-written fake client tests your understanding of MCP, which is the thing most likely to be wrong. Use the inspector for the wire and unit-test your handlers directly.
+Then one parity assertion:
 
-**Do not test that a host connects.** You cannot automate it, it depends on their UI, and it fails for reasons outside your repo. Verify discovery with `curl`, verify the wire with the inspector, and treat the host as manual acceptance.
+```text
+legacy tools/call(input X) and modern tools/call(input X)
+→ same policy decision
+→ same handler
+→ same normalized business result
+→ same audit semantics
+```
+
+## 5. OAuth attack matrix
+
+The happy path is one test. Most OAuth tests should prove refusal:
+
+- 401 contains a valid `resource_metadata` pointer;
+- discovery pins trusted origins, resource and scopes;
+- DCR refuses unsupported `application_type`;
+- unsafe, repeated or unregistered redirect URI is refused;
+- another issuer cannot use the client id;
+- anonymous caller cannot mint a code;
+- `plain` PKCE and malformed verifier are refused;
+- malformed verifier does **not** burn a code;
+- valid-shaped wrong verifier burns it and cannot be retried;
+- thrown transaction failure cannot roll the deletion back;
+- another client, redirect, issuer or resource cannot redeem the code;
+- expired and replayed code produce the same opaque `invalid_grant`;
+- token endpoint rejects JSON and accepts form encoding;
+- token response has `no-store` and `no-cache`;
+- token audience equals the protected resource;
+- bearer for another audience or issuer fails authentication;
+- read-only grant sees/calls no write action;
+- reconnect replaces only the same client grant;
+- no failure echoes code, verifier, token or service secret.
+
+For CIMD, add SSRF, redirect, oversized document, timeout and stale-metadata tests.
+
+## 6. Policy, approval and audit
+
+For every risk tier:
+
+- default decision is explicit and fail-closed;
+- a caller cannot downgrade risk through arguments;
+- approval binds connector + action + canonical input;
+- changing one argument requires a new approval;
+- one approval cannot be consumed twice concurrently;
+- no approval store means refusal, not permission;
+- denied/unknown actions write a safe audit event without raw payload;
+- audit-sink failure does not report a completed side effect as failed;
+- R4/arbitrary shell/filesystem capabilities are absent or unconditionally denied by construction.
+
+## 7. Golden prompts
+
+Keep direct, indirect, follow-up and negative prompts in the languages users actually type.
+
+Structural CI tier:
+
+- every expected tool exists;
+- every tool has at least one direct prompt;
+- negative prompts expect no call;
+- no duplicate case ids;
+- follow-up cases preserve ids returned by the prior result.
+
+Behavioral on-demand tier:
+
+- send the entire relevant catalog slice to the target model;
+- fail setup errors loudly instead of scoring them as model misses;
+- retry rate limits separately;
+- group failures by confused tool pair;
+- record model/version and catalog digest;
+- know the token cost before running the whole suite.
+
+## 8. Plugin-package contracts
+
+For `.codex-plugin/plugin.json`, `.app.json`, `.mcp.json`, skills and marketplace entries:
+
+- every JSON/YAML document parses;
+- every declared relative path begins `./`, remains inside the package and exists;
+- plugin/server/package versions intentionally agree;
+- `.app.json` contains a real registered id, never placeholder text;
+- `.mcp.json` contains no embedded user credential;
+- OpenAI and Claude wrappers keep their own schema shapes;
+- marketplace source resolves from the documented root;
+- skills have valid frontmatter and no stale tool names;
+- packaged, resource-served and optional extension entries resolve to the same reviewed source/digest;
+- draft `skills/list` / `skills/get` is never the sole discovery path;
+- no private key, bearer, token or raw `.env` value is tracked.
+
+A cookbook should test the **template contract** without committing a real consumer package at its own root.
+
+## 9. Documentation contracts
+
+For a guide repo, CI should also verify:
+
+- required H1/Scope/Assumes header shape;
+- every relative Markdown link resolves;
+- router file counts match the directory;
+- generated consumer artifacts are not accidentally committed at cookbook root;
+- placeholders stay generic;
+- runnable example packages typecheck, test and build from a frozen lockfile.
+
+This repository ships `scripts/check-docs.mjs` and `.github/workflows/docs.yml` as the executable version of that gate.
+
+## 10. One live call before “done”
+
+Run against the deployed URL and read the raw exchange:
+
+1. both OAuth discovery documents;
+2. unauthenticated 401 challenge;
+3. one OAuth round trip;
+4. one legacy `tools/list` and `tools/call`;
+5. one stateless `server/discover`, `tools/list` and `tools/call` when advertised;
+6. one read and one approval-gated write;
+7. metadata refresh in the actual host;
+8. one fresh installation of the packaged plugin when packaging is part of the deliverable.
+
+Unit tests cannot prove a reverse proxy preserved headers, a deployment used the right origin, or a host refreshed its frozen tool snapshot.
+
+## What not to fake
+
+Do not hand-write a fake MCP client as the main wire proof. It tests your interpretation of the protocol—the part most likely to be wrong. Use MCP Inspector/official SDK transport for the wire and unit-test your dispatcher/handlers directly.
+
+Do not score “the host connected” as an automated contract. Verify everything the repo controls, then keep a short manual acceptance checklist for the host UI.

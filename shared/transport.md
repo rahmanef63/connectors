@@ -1,74 +1,198 @@
 # Transport
 
-**Scope:** the wire contract — `POST /mcp` JSON-RPC shape, streamable HTTP vs SSE, notifications, protocol version, error codes, status codes, discovery documents.
-**Assumes:** you are writing or debugging the endpoint itself. Auth is covered separately in [`oauth.md`](./oauth.md).
+**Scope:** the wire contract — one `POST /mcp` endpoint, legacy and stateless protocol eras, Streamable HTTP/SSE, JSON-RPC errors, HTTP status, cache behavior and OAuth discovery.
+**Assumes:** you are writing or debugging the endpoint itself. Authorization is [`oauth.md`](./oauth.md); the full 2026 migration is [`modern-protocol.md`](./modern-protocol.md).
 
-## One endpoint, JSON-RPC over POST
+## One endpoint, one dispatcher
 
-`POST /mcp`, `content-type: application/json`, a JSON-RPC object in and one out. That covers every remote host.
+Every remote host reaches one stable HTTPS endpoint, normally `POST /mcp`. The transport parses and normalizes JSON-RPC, then hands the call to the same catalog, policy, audit and business handlers.
 
-Methods to implement: `initialize`, `tools/list`, `tools/call`, `ping`. Ack `notifications/*`.
+Do not create a ChatGPT dispatcher, a Claude dispatcher and a Cursor dispatcher. Hosts differ at registration and negotiation, not at the application core.
 
-That is the tools surface, and it is what most servers need. MCP also defines `resources/*` and `prompts/*` — a different primitive with a different controller, covered in [`tool-design.md`](./tool-design.md#0-a-tool-is-one-of-three-primitives-and-often-the-wrong-one). Decide you do not need them; do not skip them by accident.
+## Two protocol eras now coexist
 
-`tools/list` is paginated in the spec: it accepts an opaque `cursor` and may return `nextCursor`. A registry of a few dozen tools fits in one page and every shipping client reads one, so returning the whole list is fine — but if you are generating tools per tenant or per table, that assumption is yours to check, not the spec's.
+| Era | Revisions | Startup | What the endpoint implements |
+|---|---|---|---|
+| **Initialize-based** | `2024-11-05` through `2025-11-25` | `initialize`, then legacy lifecycle/notifications | `initialize`, `ping`, `tools/*` and any `resources/*` / `prompts/*` you genuinely expose |
+| **Stateless** | `2026-07-28` onward | no `initialize`; optional `server/discover` probe | `server/discover` plus normal RPCs, each carrying its own version/client context |
+
+Serve both from one URL while real clients still use both. The implementation pattern is in [`modern-protocol.md`](./modern-protocol.md).
+
+## Legacy methods
+
+At minimum:
+
+- `initialize`;
+- `tools/list`;
+- `tools/call`;
+- `ping`;
+- empty acknowledgement for supported notifications.
+
+MCP also defines resources and prompts. Decide deliberately whether each capability is a tool, resource or prompt in [`tool-design.md`](./tool-design.md); do not implement an addressable document as a model-controlled tool by reflex.
+
+`tools/list` is paginated in the protocol. A small static catalog may return one page, but a per-tenant/generated catalog must either remain bounded or implement opaque cursors honestly.
+
+## Modern methods and headers
+
+The stateless era requires `server/discover` on the server and self-describing normal requests. Over HTTP, modern requests duplicate routing facts in headers:
+
+```http
+MCP-Protocol-Version: 2026-07-28
+Mcp-Method: tools/call
+Mcp-Name: posts_create
+```
+
+The body carries the same method/name and per-request `_meta`. Validate equality before dispatch. Do **not** demand those headers from a request that negotiated a legacy revision; that breaks the compatibility path you intended to keep.
 
 ## Streamable HTTP vs SSE
 
-Modern hosts use **streamable HTTP**. Some older or IDE clients still expect **SSE**. Notion serves both — streamable HTTP suits Cursor, SSE buys compatibility with more clients — and crucially, **the payloads are identical**. Supporting SSE is a transport concern, never a second tool surface or a second output format.
+Modern hosts use **Streamable HTTP**. A JSON-RPC request sent by POST may receive either:
 
-Start with plain POST. Add SSE only when a client you actually need refuses to connect. Do not adapt output per client; that is the road back to N servers.
+- one `application/json` JSON-RPC object; or
+- `text/event-stream` when the server genuinely streams.
 
-## JSON-RPC batching is GONE
+A GET may return SSE or answer `405 Method Not Allowed` with `Allow: POST` when the server does not offer a resumable SSE stream. Session IDs are optional in initialize-based Streamable HTTP and absent in stateless MCP.
 
-The 2025-06-18 revision **removed** batching from MCP. Do not implement array-of-requests handling, and delete it if an older recipe told you to. No shipping client emits batches.
+Start with bounded JSON POST. Add SSE when a client or workload actually needs progress, resumability or server messages. SSE is a transport choice, never a second tool catalog or result format.
+
+## Batching is version-specific, not a timeless feature
+
+- `2025-03-26` added JSON-RPC batching.
+- `2025-06-18` removed it.
+- Stateless MCP is self-contained per request.
+
+Do not accept request arrays on a `2025-06-18+` path. Only keep batch handling when you intentionally still support a revision that defined it and your logs show clients using it. “Be lenient everywhere” is not compatibility when it makes the negotiated protocol meaningless.
 
 ## Notifications
 
-A notification has **no `id`** and expects **no body**. Ack every one with `202`, not just `notifications/initialized` — a client that sends `notifications/cancelled` and gets nothing back will sit waiting.
+For initialize-based clients, a JSON-RPC notification has no `id` and expects no JSON-RPC response. Over the simple HTTP adapter, return an empty `202 Accepted` for the notifications you support:
 
 ```ts
-if (body?.id == null && String(body?.method ?? "").startsWith("notifications/")) {
+if (rpc.id === undefined) {
   return new Response(null, { status: 202 });
 }
 ```
 
-Deciding this before the auth check is a legitimate trade (it does no work and reveals nothing) but it means notifications skip your rate limiter. Fine by default — just write the trade-off down where the next reader sees it.
+Validate authentication and any modern transport metadata **before** treating arbitrary input as a harmless notification. Otherwise a notification-shaped request can become an unmetered bypass.
 
-## Protocol version
+## Protocol negotiation
 
-Echo back `params.protocolVersion` when you support it, otherwise return your newest. `"2024-11-05"` is still accepted by every shipping client, so a stale constant is not urgent — but a hardcoded one that ignores the client's request is a latent break.
+### Initialize-based
 
-Capabilities: `{ tools: { listChanged: false } }` unless you genuinely push list changes.
+Keep an explicit supported set. When the client requests one you support, echo it. Otherwise return your newest legacy revision and let the client decide whether it can continue.
 
-## Error codes
+```ts
+const LEGACY = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"] as const;
+```
+
+Do not advertise a revision because its number is newer. Advertise it only when you implement the behavior that revision requires.
+
+### Stateless
+
+The version is per request. Validate:
+
+- header version equals body `_meta` version;
+- method header equals JSON-RPC method;
+- name header equals tool/resource/prompt target when applicable;
+- unsupported version returns a dedicated error with the supported list.
+
+## JSON-RPC error mapping
 
 | Code | Use for |
 |---|---|
-| `-32700` | unparseable body |
-| `-32601` | unknown method |
-| `-32602` | unknown tool, or bad arguments — this is the spec's own worked example |
-| `-32603` | your dispatcher threw |
-| `-32001` (custom) | unauthorized — pair it with HTTP 401 + `WWW-Authenticate` |
-| `-32003` (custom) | **insufficient scope** — pair it with HTTP 403 + an RFC 6750 challenge naming the scope required ([`oauth.md`](./oauth.md#the-half-that-gets-skipped-actually-checking-it)) |
-| `-32029` (custom) | rate limited — pair it with HTTP 429 + `Retry-After` |
+| `-32700` | body cannot be parsed as JSON |
+| `-32600` | malformed JSON-RPC request |
+| `-32601` | RPC method the server does not implement |
+| `-32602` | invalid params or unknown tool under a known `tools/call` method |
+| `-32603` | internal dispatch failure after safe normalization |
+| implementation-defined `-320xx` | stable transport/auth/version/rate-limit conditions your clients can act on |
 
-**Execution failures are not protocol errors.** A tool that ran and failed returns `result.isError = true` with text. Only the transport/dispatch layer uses the `error` envelope. The full result shape — text content, `structuredContent`, and why declaring an `outputSchema` is usually a downgrade — is [`results.md`](./results.md).
+An unknown **tool** is not an unknown **RPC method**. Tests should prove an unlisted tool never reaches a handler.
 
-## Status codes that matter to a host
+Execution failures are tool results, not protocol errors. Return `result.isError = true` with readable text so the model can explain the failure. The exact result contract is [`results.md`](./results.md).
 
-- **401** on a bad/absent bearer, always with `WWW-Authenticate: Bearer resource_metadata="https://…/.well-known/oauth-protected-resource"`. That header is how a client discovers where to authenticate; without it, hosts report your server as not supporting OAuth.
-- **429** with `Retry-After`.
-- **202** with an empty body for notifications.
-- **405** on `GET /mcp`, with `Allow: POST`.
+## HTTP status matters too
 
-## Discovery documents
+Use HTTP as well as JSON-RPC:
 
-Serve both, cacheable (`public, max-age=3600`):
+- **200** — normal JSON-RPC result, including `isError: true` execution outcomes;
+- **202** — accepted notification with empty body;
+- **400** — malformed request or modern header/body mismatch;
+- **401** — absent/invalid bearer, with `WWW-Authenticate` discovery pointer;
+- **403** — valid credential with insufficient scope, with RFC 6750 challenge;
+- **404** — stateless RPC method not found, paired with JSON-RPC `-32601`;
+- **405** — unsupported HTTP verb, with `Allow`;
+- **413** — request body over the server cap;
+- **429** — rate limited, with `Retry-After`;
+- **500/502/504** — transport/upstream failures only after internal detail is redacted.
 
-- `/.well-known/oauth-protected-resource` (RFC 9728)
-- `/.well-known/oauth-authorization-server` (RFC 8414)
+A blanket “always 200 because JSON-RPC” throws away the recovery signals OAuth clients, proxies and operators need.
 
-**Pin their origin to a constant, never the request `Host` header.** These documents are identical for every caller, so reading the host buys nothing — and it lets a spoofed `Host` rewrite the `authorization_endpoint` a client is about to trust.
+## OAuth discovery is not `server/discover`
 
-Framework trap: on Next.js with `cacheComponents` (PPR) enabled, adding a **second** child under `app/.well-known/` has been observed to break the build while prerendering an unrelated page. If that bites, author the documents under a normal path and map them with `rewrites()` — clients still see the RFC path, which is all the spec requires.
+These are three different documents/RPCs:
+
+| Surface | Purpose |
+|---|---|
+| `/.well-known/oauth-protected-resource` | names the MCP resource and authorization server |
+| `/.well-known/oauth-authorization-server` | names OAuth endpoints and capabilities |
+| `server/discover` | stateless MCP protocol/capability discovery |
+
+Serve the two OAuth documents public, CORS-open and cacheable (`public, max-age=3600`). Pin their contents to trusted deployment constants, never the request host.
+
+`server/discover` may contain per-server protocol instructions and capabilities. If its output can vary by authorization context, mark it private; do not reuse the public OAuth metadata cache policy blindly.
+
+## Per-user catalogs and cache safety
+
+A dynamic `tools/list` is authorization data. Build it only after authenticating the request and intersecting:
+
+```text
+installed capabilities
+∩ connected accounts/devices
+∩ tenant membership
+∩ policy
+∩ caller scopes
+```
+
+Then:
+
+- sort by stable name;
+- return deterministic descriptors;
+- use private cache scope/short TTL in the modern era;
+- never put one user's list in a shared CDN cache;
+- optionally emit a namespaced digest for observability.
+
+## Request and response bounds
+
+At the HTTP edge:
+
+- require JSON content type for JSON requests;
+- cap declared and actual request bytes;
+- parse one object, not arbitrary top-level values;
+- cap response bytes and streaming duration;
+- cancel work when the caller disconnects;
+- never follow a credential-bearing redirect to another origin;
+- return generic external errors and detailed redacted server logs.
+
+Rich image/file tools may receive an explicitly reviewed larger result cap. Do not raise the global cap to accommodate one screenshot endpoint.
+
+## Framework routing trap
+
+On some Next.js/PPR builds, multiple literal children under `app/.well-known/` have caused prerender failures. A safe fallback is to author metadata under normal routes and map the RFC paths with rewrites. What matters is the externally visible URL and response, not the source-tree folder spelling.
+
+## Verification commands
+
+```bash
+curl -i https://MCP_ORIGIN/mcp
+curl -i https://MCP_ORIGIN/.well-known/oauth-protected-resource
+curl -i https://MCP_ORIGIN/.well-known/oauth-authorization-server
+```
+
+Then use MCP Inspector for one legacy initialize flow and one stateless `server/discover`/tool-call flow. A browser showing a JSON page is not proof that a host can negotiate the wire contract.
+
+## Primary sources
+
+- MCP transports (initialize-based): <https://modelcontextprotocol.io/specification/2025-11-25/basic/transports>
+- MCP stateless release: <https://blog.modelcontextprotocol.io/posts/2026-07-28/>
+- Stateless migration details: <https://modelcontextprotocol.io/seps/2575-stateless-mcp>
+- OpenAI MCP server guide: <https://developers.openai.com/plugins/build/mcp-server>

@@ -14,29 +14,64 @@ Three steps. Nothing app-specific is involved.
 ```ts
 import { openAIFileSchema, fileParamsMeta } from "@rahmanef/mcp-files";
 
+const securitySchemes = [{ type: "oauth2", scopes: ["mcp.write"] }];
+
 export const attachMedia = {
   name: "portfolio_attach_media",
+  title: "Attach portfolio media",
   description:
-    "Attach an image to a portfolio entry and optionally make it the thumbnail. " +
-    "Use when the user wants a picture on a project. Do NOT use to change text.",
+    "Attach one image to an existing portfolio entry. Use after the entry id and desired usage are known. " +
+    "Do NOT use to change text. Returns stable resource/media ids and the stored URL.",
   inputSchema: {
     type: "object",
     properties: {
       item_id: { type: "string", description: "Id from portfolio_list." },
       file: openAIFileSchema(),
-      usage: { type: "string", enum: ["thumbnail", "gallery", "attachment"] },
+      usage: {
+        type: "string",
+        enum: ["thumbnail", "gallery", "attachment"],
+        description: "How the image should be used. Defaults to gallery.",
+      },
     },
     required: ["item_id", "file"],
     additionalProperties: false,
   },
+  outputSchema: {
+    type: "object",
+    properties: {
+      resourceId: { type: "string" },
+      mediaId: { type: "string" },
+      usage: { type: "string" },
+      url: { type: "string" },
+      previous: {
+        anyOf: [
+          {
+            type: "object",
+            properties: { mediaId: { type: "string" }, url: { type: "string" } },
+            required: ["mediaId", "url"],
+            additionalProperties: false,
+          },
+          { type: "null" },
+        ],
+      },
+    },
+    required: ["resourceId", "mediaId", "usage", "url"],
+    additionalProperties: false,
+  },
+  securitySchemes,
   annotations: {
-    title: "Attach media to a portfolio entry",
+    title: "Portfolio: Attach media",
     readOnlyHint: false,
     idempotentHint: false,
     destructiveHint: false, // see "Reversibility" below
     openWorldHint: true,    // a public page changes
   },
-  _meta: fileParamsMeta(["file"]),
+  _meta: {
+    ...fileParamsMeta(["file"]),
+    securitySchemes,
+    "openai/toolInvocation/invoking": "Attaching media…",
+    "openai/toolInvocation/invoked": "Media attached",
+  },
 };
 ```
 

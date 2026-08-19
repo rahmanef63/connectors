@@ -65,7 +65,7 @@ Everything below lives behind **Advanced OAuth settings** and is **discovered fr
 Three things that only show up once you are looking at it:
 
 - **DCR and CIMD render as `(Unavailable)`** in the dropdown when the server did not advertise them. The modal states the cause plainly: *"If Registration URL is missing, Dynamic Client Registration will fail."* So a server with RFC 7591 registration must get that URL into its discovery document, or the user is forced onto a hand-made client for no reason.
-- **`Resource` is the MCP endpoint, not the origin** — the placeholder is `urn:example:resource`, and it is the RFC 8707 resource indicator, which for our servers is the same string as the Server URL.
+- **`Resource` is the MCP endpoint, not the origin** — the placeholder is `urn:example:resource`, and it is the RFC 8707 resource indicator. In the one-endpoint design here, use the exact canonical Server URL as `MCP_RESOURCE`.
 - **`OIDC enabled` is greyed out** with *"This server did not advertise an OIDC configuration URL, so OpenID support is unavailable."* That is the normal state and nothing is wrong. OIDC here only lets ChatGPT read the user's email for authorization domain claiming; MCP does not need it.
 
 The claude.ai dialog is four fields against these twenty: `Name`, `Remote MCP server URL`, and under **Advanced settings** an optional `OAuth Client ID` and `OAuth Client Secret`. Both stay empty when the server supports dynamic registration.
@@ -147,12 +147,11 @@ No space after that colon, on purpose: "Cursor and Claude Desktop (Windows) have
 ```bash
 curl -sS -X POST https://MCP_ORIGIN/mcp \
   -H "Content-Type: application/json" \
-  -H "MCP-Protocol-Version: 2024-11-05" \
   -H "Authorization: Bearer MCP_TOKEN" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"0.0.0"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0.0.0"}}}'
 ```
 
-Those three `params` are the spec-required set. The `MCP-Protocol-Version` header is mandated on every request **after** initialize, not on initialize itself — it is here so the same line works for the follow-up calls ([lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)). Send the version the **server** advertises.
+Those three `params` are the legacy lifecycle-required set. Read `protocolVersion` from the initialize result, then send that exact value in `MCP-Protocol-Version` on follow-up calls. Do not claim `2024-11-05` while serving Streamable HTTP; that revision describes the transport Streamable HTTP replaced. For stateless `2026-07-28`, use `server/discover` and the per-request headers/body contract in [`modern-protocol.md`](./modern-protocol.md).
 
 **A 401 is a passing smoke test.** Verified live 2026-08-13 against two independent servers. Server A: no credentials → `401`, `www-authenticate: Bearer realm="SERVER_NAME", error="invalid_token"`; `GET /mcp` → `405`, `allow: POST, OPTIONS`. Server B: `401`, `www-authenticate: Bearer resource_metadata="https://MCP_ORIGIN/.well-known/oauth-protected-resource"`; `GET /mcp` → `405`, `allow: POST`. Expect a 401 and a 405 — the `www-authenticate` form and the `allow` list are per-server, so assert on the status codes, not the strings. That proves DNS, TLS, routing and the auth gate. You are ruling out a `404` (wrong path, or on Convex the `.cloud` origin instead of `.site` — `convex/mcp/routes.ts:1-3`) and a timeout. Say so next to the button, or a reader who sees 401 re-mints a token that was never the problem.
 
