@@ -7,3 +7,6 @@
 .vscode/
 dist/
 node_modules/
+
+# Local MSO runtime state — never commit
+.mso/
