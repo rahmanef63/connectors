@@ -35,8 +35,9 @@ for (const file of markdown) {
   const rel = relative(root, file);
   const text = readFileSync(file, "utf8");
   const lines = text.split(/\r?\n/);
-  if (!lines[2]?.startsWith("**Scope:**")) failures.push(`${rel}: line 3 must start with **Scope:**`);
-  if (!lines[3]?.startsWith("**Assumes:**")) {
+  const isAgentSkillArtifact = rel.startsWith(`.agents${sep}skills${sep}`);
+  if (!isAgentSkillArtifact && !lines[2]?.startsWith("**Scope:**")) failures.push(`${rel}: line 3 must start with **Scope:**`);
+  if (!isAgentSkillArtifact && !lines[3]?.startsWith("**Assumes:**")) {
     failures.push(`${rel}: line 4 must start with **Assumes:**`);
   }
 
@@ -52,7 +53,7 @@ for (const file of markdown) {
     }
     if (fence === null && line.startsWith("# ")) h1Count += 1;
   }
-  if (!lines[0]?.startsWith("# ") || h1Count !== 1) failures.push(`${rel}: must contain exactly one H1 outside code fences, on line 1`);
+  if (!isAgentSkillArtifact && (!lines[0]?.startsWith("# ") || h1Count !== 1)) failures.push(`${rel}: must contain exactly one H1 outside code fences, on line 1`);
   if (fence !== null) failures.push(`${rel}: unclosed code fence opened at line ${fence.line}`);
 
   const links = [...text.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)].map((match) => match[1]);

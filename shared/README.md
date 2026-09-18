@@ -28,7 +28,7 @@ Pull these one at a time, on demand. Reading the folder end to end costs context
 
 - [`setup-form.md`](./setup-form.md) ends in a rendered setup card.
 - [`icons.md`](./icons.md) ends in listing/brand assets.
-- [`testing.md`](./testing.md) ends in executable contract gates; this repo's implementation is `scripts/check-docs.mjs` plus `.github/workflows/docs.yml`.
+- [`testing.md`](./testing.md) ends in executable contract gates; this repo's implementation is `scripts/check-docs.mjs` plus `scripts/check-builder-skill.mjs`, with package-specific tests/builds run by the chosen CI/CD orchestrator.
 
 Everything else changes code or policy you were already building in the target project.
 

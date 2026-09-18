@@ -1,7 +1,7 @@
-# package.md — bundle the registered MCP server into a reusable plugin
+# package.md — bundle a working MCP server into a portable plugin
 
-**Scope:** packaging a working, already-registered MCP connection with optional skills, assets and local MCP servers for ChatGPT/Codex installation and repository marketplaces.
-**Assumes:** [`register.md`](./register.md) completed successfully and you copied the real technical connection id beginning with `plugin_asdk_app`; public directory review remains in [`publish.md`](./publish.md).
+**Scope:** packaging a working MCP server and optional workflow skills for ChatGPT/Codex, with portable Agent Plugin files as the default and the older Codex package layout as a compatibility fallback.
+**Assumes:** the MCP server already works; hosted ChatGPT registration is covered by [`register.md`](./register.md), and public directory review remains in [`publish.md`](./publish.md).
 
 Registration and packaging are different jobs:
 
@@ -10,77 +10,133 @@ Registration and packaging are different jobs:
 
 Do not package a guessed URL as a replacement for registration. For a hosted ChatGPT MCP connection, `.app.json` points at the technical id ChatGPT created.
 
-## Pick one of the two MCP shapes
+## New packages: portable Agent Plugin first
 
-| What the plugin uses | File | Manifest field |
-|---|---|---|
-| A remote MCP connection already registered in ChatGPT | `.app.json` | `"apps": "./.app.json"` |
-| A server process distributed with the plugin, commonly local `stdio` for Codex | `.mcp.json` | `"mcpServers": "./.mcp.json"` |
-
-A plugin may have both. They are not aliases: `.app.json` is an account/workspace connector binding; `.mcp.json` is a process/server configuration bundled in the package.
-
-## Folder contract
+Current OpenAI documentation makes the portable package the default for new work:
 
 ```text
 my-plugin/
-├── .codex-plugin/
-│   └── plugin.json       # required; the only file inside .codex-plugin/
-├── .app.json             # optional hosted connection mapping
-├── .mcp.json             # optional bundled MCP server config
-├── skills/               # optional repeatable workflows
-│   └── use-my-app/
-│       └── SKILL.md
-├── assets/               # optional icon, logo, screenshots
-└── README.md              # optional operator notes
+├── plugin.json          # required portable manifest
+├── mcp.json             # optional portable MCP server declarations
+├── skills/              # optional workflow skills
+├── assets/              # optional listing assets
+├── .app.json            # optional registered OpenAI app mapping
+└── .codex-plugin/
+    └── plugin.json      # optional compatibility settings layer
 ```
 
-Every path in `plugin.json` is relative to the plugin root, begins with `./`, and stays inside that root.
+Keep `plugin.json`, `mcp.json`, `skills/` and `assets/` at the package root. A separate `.codex-plugin/plugin.json` remains supported as a compatibility fallback, but it is no longer the canonical identity for a new portable package.
 
-## Minimal hosted-MCP package
+Do **not** rename a legacy `.mcp.json` to `mcp.json` and call it migrated. Portable MCP config has its own schema and an explicit transport type.
 
-`.codex-plugin/plugin.json`:
+### Portable `plugin.json`
 
 ```json
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "my-app",
   "version": "0.1.0",
-  "description": "Use My App through its authenticated MCP server.",
-  "apps": "./.app.json",
-  "interface": {
-    "displayName": "My App",
-    "shortDescription": "Read and update My App",
-    "longDescription": "Use My App's reviewed MCP tools and optional workflows.",
-    "developerName": "YOUR_TEAM",
-    "category": "Productivity",
-    "capabilities": ["Read", "Write"],
-    "websiteURL": "https://APP_ORIGIN",
-    "privacyPolicyURL": "https://APP_ORIGIN/privacy",
-    "termsOfServiceURL": "https://APP_ORIGIN/terms",
-    "defaultPrompt": [
-      "Show my recent records in My App.",
-      "Create a new record after confirming the details."
-    ],
-    "brandColor": "#RRGGBB",
-    "composerIcon": "./assets/icon.png",
-    "logo": "./assets/logo.png",
-    "screenshots": []
-  }
+  "description": "Use My App through reviewed MCP tools and reusable workflows.",
+  "author": {
+    "name": "YOUR_TEAM",
+    "url": "https://APP_ORIGIN"
+  },
+  "homepage": "https://APP_ORIGIN",
+  "license": "MIT",
+  "keywords": ["mcp", "productivity"]
 }
 ```
 
-`.app.json` shape:
+Portable components use fixed root locations. Do not invent alternate paths for `skills/` or `mcp.json`.
+
+### OpenAI-specific presentation
+
+Put OpenAI-specific display settings and registered-app mappings in `extensions.com.openai`:
 
 ```json
 {
-  "apps": {
-    "my-app": {
-      "id": "plugin_asdk_app_ID_FROM_CHATGPT"
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "my-app",
+  "version": "0.1.0",
+  "description": "Use My App through reviewed MCP tools and reusable workflows.",
+  "extensions": {
+    "com.openai": {
+      "apps": "./.app.json",
+      "interface": {
+        "displayName": "My App",
+        "shortDescription": "Read and update My App",
+        "longDescription": "Use reviewed My App MCP tools and workflow skills.",
+        "developerName": "YOUR_TEAM",
+        "category": "Productivity",
+        "capabilities": ["Read", "Write"],
+        "websiteURL": "https://APP_ORIGIN",
+        "privacyPolicyURL": "https://APP_ORIGIN/privacy",
+        "termsOfServiceURL": "https://APP_ORIGIN/terms",
+        "defaultPrompt": [
+          "Show my recent records in My App.",
+          "Create a new record after confirming the details."
+        ]
+      }
     }
   }
 }
 ```
 
-The string above is explanatory pseudodata. In a real package, replace it with the exact id from the registered connection **before committing or installing**. Never publish an `.app.json` containing `REPLACE_ME`, `TODO`, an empty id or an id copied from somebody else's workspace.
+When `extensions.com.openai` exists, treat it as the OpenAI settings authority instead of maintaining a second drifting copy in the compatibility layer.
+
+### Portable `mcp.json`
+
+Remote Streamable HTTP example:
+
+```json
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "my-app": {
+      "type": "streamable-http",
+      "url": "https://mcp.example.com/mcp"
+    }
+  }
+}
+```
+
+This is package configuration, not a credential store. Never embed a user's bearer token, API key, OAuth secret or session cookie.
+
+### Registered hosted connection and `.app.json`
+
+A hosted ChatGPT connection can still require a workspace-specific mapping. Register the live MCP first and use the exact technical id returned by that registration:
+
+```json
+{
+  "apps": {
+    "my-app": {
+      "id": "plugin_asdk_app_ID_FROM_CHATGPT",
+      "required": true
+    }
+  }
+}
+```
+
+That placeholder is documentation only. Never manufacture a real-looking id or copy one from another workspace and assume it resolves. The mapping is package configuration; the MCP server still authenticates and authorizes the real user on every request.
+
+### Compatibility-only layout
+
+Existing packages and current plugin-creator output may still use:
+
+```text
+my-plugin/
+├── .codex-plugin/
+│   └── plugin.json
+├── .mcp.json
+├── .app.json
+├── skills/
+├── hooks/
+└── assets/
+```
+
+That layout remains supported. Maintain it when an existing package or tool explicitly uses it, but prefer the portable root format for new packages.
+
+A compatibility manifest may point to `./skills/`, `./.mcp.json` and `./.app.json`. Keep every referenced path inside the package root and do not assume legacy `.mcp.json` shares the portable `mcp.json` schema.
 
 ## Add skills only when they encode a workflow
 
@@ -97,41 +153,17 @@ inspect current state
 
 Keep business schemas in the MCP server. Keep workflow policy and tool-order guidance in `SKILL.md`. A skill that repeats 40 input schemas will drift the first time the server changes. When the server also exposes the workflow over MCP resources or the draft Skills extension, generate both forms from this same reviewed source and digest.
 
-Add the pointer only when the directory exists:
+Portable packages discover `skills/` at the package root automatically. A `skills: "./skills/"` pointer belongs only to the older compatibility manifest shape. Do not maintain both as competing sources of truth.
 
-```json
-{
-  "skills": "./skills/"
-}
-```
+When one skill specifically requires an MCP server, declare that dependency in its `agents/openai.yaml` using the current documented MCP dependency form; dependency metadata does not replace runtime authentication or clear workflow instructions.
 
-## Add a bundled local server only when installation owns the process
+## MCP server declarations stay schema-specific
 
-`.mcp.json` may be a direct map:
+For a portable package, use root `mcp.json` with the Agent Plugins MCP schema and the transport `type` required by that schema. The remote Streamable HTTP form is shown above.
 
-```json
-{
-  "local-helper": {
-    "command": "node",
-    "args": ["./mcp/server.mjs"]
-  }
-}
-```
+For an older compatibility-only package, keep its existing `.mcp.json` contract and validate it against the tooling that consumes that layout. Do not make a single JSON file pretend to satisfy both formats.
 
-or a wrapped map:
-
-```json
-{
-  "mcp_servers": {
-    "local-helper": {
-      "command": "node",
-      "args": ["./mcp/server.mjs"]
-    }
-  }
-}
-```
-
-Do not put a remote user's OAuth token, API key or client secret in either shape. Hosted user auth belongs to the remote server's OAuth flow; local secrets belong in the user's secret store or environment, never in the archive.
+Do not put a remote user's OAuth token, API key or client secret in either shape. Hosted user auth belongs to the remote server's OAuth flow; local secrets belong in the user's secret store or environment, never in the plugin archive.
 
 ## Repository marketplace
 
@@ -146,16 +178,21 @@ Minimal shape:
 ```json
 {
   "name": "my-team-plugins",
+  "interface": {
+    "displayName": "My Team Plugins"
+  },
   "plugins": [
     {
       "name": "my-app",
       "source": {
-        "source": "path",
+        "source": "local",
         "path": "./plugins/my-app"
       },
-      "interface": {
-        "displayName": "My App"
-      }
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
     }
   ]
 }
@@ -178,27 +215,28 @@ A project may also ship Claude packaging. Keep the shared pieces shared and the 
 
 ```text
 plugin-root/
-├── skills/                         # reusable, provider-neutral workflows
-├── .codex-plugin/plugin.json       # OpenAI package identity
-├── .app.json                       # OpenAI registered connector mapping
-├── .mcp.json                       # bundled MCP processes, when needed
-└── .claude-plugin/plugin.json      # Claude package identity, when needed
+├── plugin.json                      # portable package identity
+├── mcp.json                         # portable MCP declarations, when needed
+├── skills/                          # reusable workflow intent
+├── .app.json                        # optional OpenAI registered-app mapping
+├── .codex-plugin/plugin.json        # optional OpenAI compatibility settings
+└── .claude-plugin/plugin.json       # optional Claude packaging
 ```
 
-Do not force one vendor's manifest schema into another vendor's file. The MCP endpoint and skill intent can be shared; registration metadata cannot.
+Do not force one vendor's manifest schema into another vendor's file. The MCP endpoint and skill intent can be shared; registration and presentation metadata cannot.
 
 ## Package contract tests
 
 Run these before installation or publication:
 
-- `.codex-plugin/plugin.json` parses as JSON;
-- `name`, `version` and `description` are non-empty;
-- every referenced relative path starts with `./`, stays inside the plugin root and exists;
-- the manifest version matches the server/package release you intend to ship;
-- `apps` appears only when `.app.json` exists;
-- `mcpServers` appears only when `.mcp.json` exists;
-- every app id is non-empty and contains no placeholder marker;
-- no secret-shaped value appears in the manifest, skills, defaults or assets metadata;
+- portable `plugin.json` parses and declares the expected Agent Plugins schema;
+- portable `mcp.json`, when present, parses, declares the MCP schema and gives every server an explicit transport `type`;
+- `.codex-plugin/plugin.json`, when retained, is compatibility metadata rather than a second portable identity;
+- `name`, `version` and `description` are non-empty and intentionally versioned;
+- every OpenAI/compatibility relative path starts with `./`, stays inside the plugin root and exists;
+- `.app.json` appears only when a registered hosted binding is required;
+- every real app id is target-specific and contains no placeholder marker;
+- no secret-shaped value appears in manifests, MCP config, skills, defaults or assets metadata;
 - every optional skill has valid frontmatter and resolves its referenced files;
 - packaged and MCP-served copies share one source/digest when both exist;
 - no draft skills method is the only route to the skill;
@@ -215,19 +253,25 @@ A real `plugin_asdk_app…` id is not a secret, but it is deployment/workspace-s
 
 ## Install and acceptance sequence
 
-1. Verify the live MCP server in developer mode.
-2. Refresh the connection after any metadata change.
-3. Copy the real technical id.
-4. Generate or write the package.
-5. Run the package contract tests.
-6. Add it to a local or repo marketplace.
-7. Restart/refresh the host, install the plugin and open a new conversation.
+1. Build and test the MCP server first.
+2. Deploy and verify the real HTTPS MCP endpoint plus auth/discovery.
+3. Register the hosted connection only when the target host requires registration.
+4. Create the portable package; add compatibility metadata only when needed.
+5. Run package and skill contract tests.
+6. Add it to a local or repository marketplace or other supported source.
+7. Restart/refresh the host, install the plugin and open a fresh conversation/session.
 8. Run direct, indirect, follow-up, write-confirmation and negative prompts.
-9. Only then continue to public review in [`publish.md`](./publish.md).
+9. Refresh/rescan after public tool/metadata changes.
+10. Only then continue to public review in [`publish.md`](./publish.md).
+
+## Archive rule
+
+Archived production plugins are valuable evidence for skill style, real interface metadata and compatibility layouts. They are not the authority for the current package root. When an archive conflicts with current OpenAI documentation, follow the current portable contract and preserve the old shape only as an explicit compatibility path.
 
 ## Primary sources
 
 - Package structure and manifest fields: <https://developers.openai.com/plugins/build/plugins>
 - Developer-mode registration and metadata refresh: <https://developers.openai.com/plugins/deploy/connect-chatgpt>
 - Public examples: <https://github.com/openai/plugins>
+- Current skill packaging and MCP dependencies: <https://developers.openai.com/plugins/build/skills>
 - Draft Skills-over-MCP reference: <https://github.com/modelcontextprotocol/experimental-ext-skills/blob/main/docs/sep-draft-skills-extension.md>

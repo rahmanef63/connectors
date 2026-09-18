@@ -1,0 +1,39 @@
+version: 1
+routing:
+  use_when:
+    - build an MCP server from zero for an existing project
+    - productionize or repair an existing MCP integration
+    - create a reusable ChatGPT/Codex plugin around an MCP server
+  do_not_use_when:
+    - answer a one-off MCP configuration question
+    - create only a Custom GPT Action over existing REST endpoints
+context:
+  target: mcp-project
+  mode: mixed
+  actor: builder
+lifecycle:
+  discover:
+    - target-repository
+    - runtime
+    - auth-model
+    - capability-surface
+  validate:
+    - tool-contracts
+    - authz-scopes
+    - protocol
+    - package-contract
+    - security-gate
+  verify:
+    - tests
+    - build
+    - deployed-mcp
+    - host-acceptance
+state:
+  source_of_truth: target-project-and-live-runtime
+  refresh: before-write-and-before-finish
+safety:
+  risk: medium
+  confirmation: contextual
+  concurrency: isolated-worktree-when-shared
+presentation:
+  authority: hybrid

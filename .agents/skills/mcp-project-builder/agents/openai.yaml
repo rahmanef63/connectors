@@ -1,0 +1,4 @@
+interface:
+  display_name: "MCP Project Builder"
+  short_description: "Build and verify production MCP integrations end to end"
+  default_prompt: "Use $mcp-project-builder to audit this project, design the MCP surface, implement it using the existing application architecture, add production contract/security tests, package it for the required hosts, and verify the deployed integration."

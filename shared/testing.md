@@ -184,13 +184,15 @@ Behavioral on-demand tier:
 
 ## 8. Plugin-package contracts
 
-For `.codex-plugin/plugin.json`, `.app.json`, `.mcp.json`, skills and marketplace entries:
+For portable `plugin.json` + `mcp.json`, optional OpenAI `.app.json`, compatibility `.codex-plugin/plugin.json`, skills and marketplace entries:
 
 - every JSON/YAML document parses;
-- every declared relative path begins `./`, remains inside the package and exists;
+- new portable packages keep canonical `plugin.json`, `mcp.json`, `skills/` and `assets/` at package root;
+- portable `mcp.json` declares the Agent Plugins MCP schema and an explicit transport `type`; do not validate it as a renamed legacy `.mcp.json`;
+- every declared relative OpenAI/compatibility path begins `./`, remains inside the package and exists;
 - plugin/server/package versions intentionally agree;
-- `.app.json` contains a real registered id, never placeholder text;
-- `.mcp.json` contains no embedded user credential;
+- `.app.json` contains a real registered id, never placeholder text, only when a registered hosted binding is needed;
+- neither portable `mcp.json` nor compatibility `.mcp.json` contains an embedded user credential;
 - OpenAI and Claude wrappers keep their own schema shapes;
 - marketplace source resolves from the documented root;
 - skills have valid frontmatter and no stale tool names;
@@ -211,7 +213,7 @@ For a guide repo, CI should also verify:
 - placeholders stay generic;
 - runnable example packages typecheck, test and build from a frozen lockfile.
 
-This repository ships `scripts/check-docs.mjs` and `.github/workflows/docs.yml` as the executable version of that gate.
+This repository ships `scripts/check-docs.mjs` as the executable version of that gate.
 
 ## 10. One live call before “done”
 

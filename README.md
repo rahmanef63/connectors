@@ -3,7 +3,13 @@
 **Scope:** the router for this repo — one paragraph of thesis, then which folder to open for your situation.
 **Assumes:** you have a web app deployed on public HTTPS and you want an AI to call it. No prior MCP knowledge.
 
-A cookbook you point Claude Code, Codex or Cursor at so it can open the smallest relevant guide and write the integration into another codebase. The Markdown is guidance; only `packages/` and the repository's validation scripts run.
+A canonical **MCP Builder Kit** you can copy beside a target project or hand to an agent. The project-local builder skill orchestrates the work; the `cn-*/` and `shared/` guides remain the technical source of truth; only `packages/` and validation scripts execute.
+
+## Start here when an agent must build the MCP
+
+Point the agent at [`.agents/skills/mcp-project-builder/SKILL.md`](./.agents/skills/mcp-project-builder/SKILL.md) or simply tell it to follow this repository's `AGENTS.md`. The skill takes the target from architecture audit through tool design, auth/OAuth, implementation, contract tests, plugin packaging, deployment and live acceptance. Detailed reusable lessons from MSO, CareerPack, Connectors Gateway and the archived plugin references live beside the skill rather than being duplicated through every guide.
+
+For substantial work, copy [the build-plan template](./.agents/skills/mcp-project-builder/assets/mcp-build-plan.md) into the target project's own task notes and fill it with verified facts.
 
 ## The thesis
 
@@ -36,7 +42,8 @@ Two things come out the far end, not one. The server, and a **copy-paste-ready s
 
 | Your situation | Folder |
 |---|---|
-| "I want an AI to read and write things in my app" — start here | [`cn-mcp-core/`](./cn-mcp-core/README.md) |
+| "Hand this repo to an agent and build/productionize the MCP end to end" | [`mcp-project-builder`](./.agents/skills/mcp-project-builder/SKILL.md) |
+| "I want an AI to read and write things in my app" — technical core | [`cn-mcp-core/`](./cn-mcp-core/README.md) |
 | The server exists; now get it into Claude Code, claude.ai, Desktop or Cowork | [`cn-claude-plugin/`](./cn-claude-plugin/README.md) |
 | The server exists; now get it into ChatGPT, for yourself or the public directory | [`cn-gpt-plugin/`](./cn-gpt-plugin/README.md) |
 | I only care about ChatGPT, I already have REST routes, one Custom GPT is enough | [`cn-gpts/`](./cn-gpts/README.md) |
@@ -86,10 +93,11 @@ The cookbook itself now verifies what can drift mechanically:
 
 ```bash
 node scripts/check-docs.mjs
+node scripts/check-builder-skill.mjs
 cd packages/mcp-files && npm ci --include=dev && npm run typecheck && npm test && npm run build
 ```
 
-`.github/workflows/docs.yml` runs the same documentation/link/package gates on pushes and pull requests. This does not replace manual host acceptance; it prevents broken local links, stale router counts, accidental consumer artifacts, placeholder connection ids, and a regressed shared package from being merged unnoticed.
+These commands are CI-provider agnostic. Run them locally and from the project's chosen CI/CD orchestrator; this cookbook does not require GitHub Actions. They prevent broken local links, stale router counts, accidental consumer artifacts, placeholder connection ids, and a regressed shared package from being accepted unnoticed.
 
 ## Reference implementation
 

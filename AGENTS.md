@@ -5,7 +5,7 @@
 
 ## Goal
 
-Produce one remote MCP server in the target codebase, plus whatever registration the user's chosen host needs. One server, several ways to register and ship it. Vendor folders describe registration and distribution only — they never change server logic.
+Produce one remote MCP server in the target codebase, plus whatever registration/package surfaces the user's chosen hosts need. For an end-to-end build, start with [`.agents/skills/mcp-project-builder/SKILL.md`](./.agents/skills/mcp-project-builder/SKILL.md); it orchestrates the work while the guides below remain the technical SSOT. One server, several ways to register and ship it. Vendor folders describe registration and distribution only — they never change server logic.
 
 ## Load only what applies
 
@@ -20,7 +20,6 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 | `LICENSE` | MIT, 2026 rahmanef63 |
 | `packages/mcp-files/` | **code** — shared OpenAI file-input contract: schema builders, SSRF-safe ingestion, store/attach adapter seams |
 | `scripts/check-docs.mjs` | executable cookbook contract: headers, local links, shared-router count, placeholder/secret/root-artifact guards |
-| `.github/workflows/docs.yml` | CI for documentation contracts plus `packages/mcp-files` typecheck, tests and build |
 | `cn-mcp-core/README.md` | the design invariant, the phase decision tree, framework/DB adaptation notes, spec links |
 | `cn-mcp-core/phase-1-bearer.md` | the endpoint: JSON-RPC dispatch, bearer auth, tool registry |
 | `cn-mcp-core/phase-2-oauth.md` | the authorization half: consent page, auth codes, token exchange, discovery documents |
@@ -53,7 +52,8 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 
 | Goal | Order |
 |---|---|
-| **Build the server** | `cn-mcp-core/README.md` → `cn-mcp-core/phase-1-bearer.md` → `shared/tool-design.md` → `shared/transport.md` → `shared/modern-protocol.md` *(dual-stack/stateless only)* → `shared/results.md` → `shared/convex.md` *(Convex only)* → `cn-mcp-core/phase-2-oauth.md` + `shared/oauth.md` *(consumer hosts)* → `cn-mcp-core/phase-3-admin-ui.md` → `shared/testing.md` → `shared/security-checklist.md` |
+| **Build/productionize end to end** | `.agents/skills/mcp-project-builder/SKILL.md` → copy its build-plan asset when useful → open only the canonical guides it routes to → finish with deployed + host acceptance |
+| **Build the server core manually** | `cn-mcp-core/README.md` → `cn-mcp-core/phase-1-bearer.md` → `shared/tool-design.md` → `shared/transport.md` → `shared/modern-protocol.md` *(dual-stack/stateless only)* → `shared/results.md` → `shared/convex.md` *(Convex only)* → `cn-mcp-core/phase-2-oauth.md` + `shared/oauth.md` *(consumer hosts)* → `cn-mcp-core/phase-3-admin-ui.md` → `shared/testing.md` → `shared/security-checklist.md` |
 | **Accept an image or file** | `shared/file-inputs.md` — the whole contract, both directions → `shared/convex.md` *(Convex: `$`-keys are fatal here)* → `shared/security-checklist.md` |
 | **Ship the setup UI** | `shared/setup-form.md` — the spec, read it first → `cn-mcp-core/phase-3-admin-ui.md` *(what the card sits inside)* → `shared/clients.md` *(per-host detail behind a tab)* → `shared/icons.md` *(only if the card carries branding)* |
 | **Ship to Claude** | `cn-claude-plugin/README.md` → stop if the answer is "paste the URL" → `cn-claude-plugin/manifest.md` *(team `.mcp.json` or a shareable bundle)* → `cn-claude-plugin/marketplace.md` *(others install it)*. Skip `shared/icons.md`: Claude exposes no icon field anywhere |
@@ -68,7 +68,8 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 - **The guide folders are not consumer packages.** Keep `.codex-plugin/`, `.claude-plugin/`, `.app.json`, `.mcp.json` and `skills/` out of cookbook root; show them in fenced examples and generate them only in the user's target project. `packages/` and repository validation tooling are the deliberate executable exceptions.
 - **Every file opens with an H1, then exactly `**Scope:**` and `**Assumes:**`, in that order, before anything else.** Tables over paragraphs. No filler, no marketing.
 - **Honesty beats fluency.** If a claim is not confirmed by a doc you actually fetched or a file you actually read, write `TODO: verify` inline. A confident wrong registration requirement costs the reader hours.
-- **Never name a consumer application here.** This repo is a cookbook for any app, so no product name, deployment id or customer hostname belongs in it. Concrete servers are `MCP_ORIGIN` / `SERVER_NAME` / `mcp.example.com`; a real one is cited as "the worked example".
+- **Keep reusable instructions product-neutral.** No deployment id, customer hostname, credential or project-specific endpoint belongs in a template. The builder's `reference-patterns.md` may name reviewed implementations such as MSO/CareerPack/Connectors Gateway only as provenance; never copy their deployment-specific values into a target.
+- **The builder skill orchestrates; the guides stay SSOT.** Do not duplicate whole OAuth, transport or schema chapters into the skill. Route to the smallest canonical file instead.
 - **The worked example is at Phase 1, bearer only.** Its `convex/mcp/routes.ts` header comment defers OAuth 2.1 + PKCE to a later phase. Cite it with real paths and real snippets; never describe it as having OAuth today.
 
 ## Two vendor doc sites refuse automated fetching
@@ -89,5 +90,6 @@ Where a browser is needed: What worked: Playwright + Chromium, a **fresh browser
 1. Every path you cite resolves — in this repo and in the target codebase.
 2. Every host-specific claim is either sourced or marked `TODO: verify`. If you close one, delete its row from the **What is still unverified** table in [`README.md`](./README.md); if you open a new one, add a row. That table is the index and it goes stale silently.
 3. No server logic branches on the calling host.
-4. Run `node scripts/check-docs.mjs`; when `packages/mcp-files/` changed, also run its locked install, typecheck, tests and build.
-5. Report which files you actually read, so the next agent can skip them.
+4. Run `node scripts/check-docs.mjs` and `node scripts/check-builder-skill.mjs`; when `packages/mcp-files/` changed, also run its locked install, typecheck, tests and build.
+5. For implementation work, do not finish at source/build proof: verify the deployed MCP and refresh/rescan the actual host when the public contract changed.
+6. Report which files you actually read, so the next agent can skip them.
