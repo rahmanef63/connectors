@@ -62,7 +62,7 @@ Keep the existing behavior for every legacy revision you still claim:
 - implement `initialize`, `ping`, `tools/list`, `tools/call` and the primitives you actually expose;
 - echo the requested legacy revision when it is in your supported set;
 - return the newest legacy revision you support when the request is absent or unknown;
-- acknowledge notifications with an empty HTTP response;
+- dispatch every supported notification through the same protocol/application pipeline, then acknowledge it with an empty HTTP response;
 - do not require modern-only headers on this path.
 
 A legacy client that omits `MCP-Protocol-Version` may still be real. Strict modern validation belongs only after the request has identified itself as modern.
@@ -174,6 +174,12 @@ For modern HTTP, an unsupported RPC returns:
 
 An unknown **tool name** under the known `tools/call` method is bad params, not an unknown RPC method. Keep those two cases separate in tests.
 
+### 5. Notifications are era-specific
+
+Legacy clients can send standard notifications such as `notifications/initialized`, and those notifications must still reach the notification dispatcher before the transport returns its empty acknowledgement. The absence of a JSON-RPC `id` means "do not send a JSON-RPC response"; it does **not** mean "skip the method".
+
+The `2026-07-28` Streamable HTTP revision defines no standard client-to-server notification methods. Do not invent modern notification semantics just to mirror legacy. If your product intentionally supports a modern custom/compatibility notification, make that allowlist explicit and dispatch it before returning `202`.
+
 ## Dynamic catalogs: deterministic, private and inspectable
 
 Build `tools/list` from the authenticated caller's current authorization context, then:
@@ -226,7 +232,16 @@ async function handleMcp(request: Request): Promise<Response> {
   const era = classifyEra(rpc, transport);
   if (era === "modern") validateModernRequest(rpc, transport);
 
-  if (rpc.id === undefined) return new Response(null, { status: 202 });
+  if (rpc.id === undefined) {
+    const dispatchableNotification =
+      era === "legacy" || shouldDispatchModernNotification(rpc.method);
+
+    if (dispatchableNotification) {
+      await dispatchNotificationSamePipeline({ caller, rpc });
+    }
+
+    return new Response(null, { status: 202 });
+  }
 
   try {
     const value = await dispatchSamePipeline({ caller, rpc });
@@ -262,6 +277,8 @@ Do not roll out a new gateway adapter and a new authorization schema in the wron
 - modern unknown RPC returns HTTP 404 plus JSON-RPC `-32601`;
 - modern unknown tool never reaches a handler;
 - one normalized tool call produces the same business result in both eras;
+- a supported legacy notification reaches the notification dispatcher before its empty HTTP `202` acknowledgement;
+- modern client-to-server notifications are accepted only when an explicit compatibility/custom allowlist says they are;
 - private catalogs are deterministic and their digest changes when a descriptor changes;
 - no request succeeds without independent authentication.
 
