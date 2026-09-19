@@ -97,6 +97,27 @@ if (!rootReadme.includes(`${expectedCount[0].toUpperCase()}${expectedCount.slice
   failures.push(`README.md: shared count must describe ${sharedDocs.length} files (${expectedCount})`);
 }
 
+const packageGuide = readFileSync(join(root, "cn-gpt-plugin", "package.md"), "utf8");
+const packageContracts = [
+  ["portable manifest includes author metadata", /"author"\s*:\s*\{[\s\S]*?"name"\s*:/],
+  ["portable MCP config uses mcpServers", /"mcpServers"\s*:\s*\{/],
+  ["marketplace keeps displayName in top-level interface", /"interface"\s*:\s*\{[\s\S]*?"displayName"\s*:/],
+  ["marketplace local source uses source=local", /"source"\s*:\s*\{[\s\S]*?"source"\s*:\s*"local"/],
+  ["marketplace entry includes installation policy", /"policy"\s*:\s*\{[\s\S]*?"installation"\s*:/],
+  ["marketplace entry includes authentication policy", /"policy"\s*:\s*\{[\s\S]*?"authentication"\s*:/],
+  ["marketplace entry includes category", /"category"\s*:\s*"[^"]+"/],
+];
+for (const [label, pattern] of packageContracts) {
+  if (!pattern.test(packageGuide)) failures.push(`cn-gpt-plugin/package.md: ${label}`);
+}
+
+const modernProtocol = readFileSync(join(root, "shared", "modern-protocol.md"), "utf8");
+const notificationDispatch = modernProtocol.indexOf("dispatchNotificationSamePipeline");
+const notificationAck = modernProtocol.indexOf('return new Response(null, { status: 202 });');
+if (notificationDispatch < 0 || notificationAck < 0 || notificationDispatch > notificationAck) {
+  failures.push("shared/modern-protocol.md: supported notifications must dispatch before the empty HTTP 202 acknowledgement");
+}
+
 const forbiddenArtifactDirs = [".codex-plugin", ".claude-plugin", "skills"];
 for (const dir of forbiddenArtifactDirs) {
   if (existsSync(join(root, dir))) failures.push(`${dir}/: generated consumer artifact must not live at cookbook root`);
