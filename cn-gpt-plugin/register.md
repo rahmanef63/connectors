@@ -1,22 +1,21 @@
 # register.md — your own MCP server, your own ChatGPT
 
-**Scope:** ChatGPT **developer mode** — connecting and testing an already-deployed MCP server for yourself/workspace. Reusable packaging is [`package.md`](./package.md); public review is [`publish.md`](./publish.md).
+**Scope:** ChatGPT custom MCP connections — connecting and testing an already-deployed MCP server for yourself/workspace. Reusable packaging is [`package.md`](./package.md); public review is [`publish.md`](./publish.md).
 **Assumes:** the server answers JSON-RPC over public HTTPS at a stable URL ending in `/mcp`, and you have read [`../cn-mcp-core/README.md`](../cn-mcp-core/README.md).
 
 ## Do this in order
 
 1. Check the two gates below. If auth fails, stop — the UI will not save you.
-2. **Settings → Security and login → turn on Developer mode.** (Stated identically on [quickstart.md](https://developers.openai.com/plugins/quickstart.md), [deploy/connect-chatgpt.md](https://developers.openai.com/plugins/deploy/connect-chatgpt.md), [build/plugins.md](https://developers.openai.com/plugins/build/plugins.md).)
-3. Go to `https://chatgpt.com/plugins`, select the **plus button**. "The plus button will only create developer-mode apps after you turn on Developer mode."
-4. Enter a user-facing **name and description** — collect these once, for every host, with [`../shared/setup-form.md`](../shared/setup-form.md).
-5. Under **Connection**, either enter the MCP server URL **including the `/mcp` path**, or select **Tunnel** and pick a tunnel / enter its `tunnel_id`.
-6. Create the connection, then review the tools and metadata ChatGPT discovered.
-7. The draft lands under **Drafts** in app settings. Test it (see below).
-8. Copy the connection's real technical id (`plugin_asdk_app…`) only after the live flow works; use it in [`package.md`](./package.md) when a reusable bundle is needed.
+2. Open `https://chatgpt.com/plugins` → **+** → **Add custom MCP server**.
+3. Supply the name, endpoint or tunnel, authentication and risk acknowledgement; select **Create as a plugin**.
+4. Review the discovered tools, install the plugin and test it in a new conversation.
+5. Copy the real technical id (`plugin_asdk_app…`) after live acceptance; package it only when distribution needs a bundle.
+
+The current Plugins flow does not require the old Developer Mode toggle. Account/workspace policies still apply. Legacy Apps screens have a separate creation/draft flow. Verified 2026-10-18 against [OpenAI's connection guide](https://developers.openai.com/plugins/deploy/connect-chatgpt) and [current help article](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
 
 ## Gate 1 — auth. Read before anything else
 
-The form offers exactly: **OAuth, No Authentication, and Mixed Authentication** ([developer-mode.md](https://developers.openai.com/api/docs/guides/developer-mode.md)). And:
+Use the server's OAuth/no-auth/per-tool auth contract; the [authentication guide](https://developers.openai.com/plugins/build/auth) is the source of truth. Static bearer headers are not a ChatGPT registration option:
 
 > "ChatGPT does not support machine-to-machine OAuth grants such as client credentials, service accounts, or JWT bearer assertions, **nor can it present custom API keys** or customer-provided mTLS certificates." — [build/auth.md](https://developers.openai.com/plugins/build/auth.md)
 
@@ -29,28 +28,19 @@ The form offers exactly: **OAuth, No Authentication, and Mixed Authentication** 
 
 For OAuth, prefer Client ID Metadata Documents (CIMD) when the authorization server/client setup supports them; keep DCR for compatible hosts and use a pre-defined/static OAuth client only when the workspace/form explicitly supplies one. Whichever path is used, the authorization request and token must remain bound to the exact protected `resource`, issuer and redirect URI. Redirect URI is `https://chatgpt.com/connector/oauth/{callback_id}`.
 
-**Where you pick it is unclear, and the two OpenAI pages disagree.** [connect-chatgpt](https://developers.openai.com/plugins/deploy/connect-chatgpt.md) walks the modal in six steps and names no auth step at all; the help centre's own configure list has *"Pick the authentication mechanism, if applicable."* between providing the endpoint and clicking Scan Tools. Expect a selector, but be ready for auth to be discovered from the server instead.
+The current connection guide explicitly includes authentication configuration before creation.
 
 **Both halves or no linking UI:** the OAuth prompt appears only when you ship per-tool `securitySchemes` **and** return a runtime error carrying `_meta["mcp/www_authenticate"]` with both `error` and `error_description`. "Without both halves ChatGPT will not show the linking UI for that tool." Details in [`../shared/oauth.md`](../shared/oauth.md).
 
 ## Gate 2 — entitlement
 
-| Requirement | Value | Source |
-|---|---|---|
-| Plan (dev mode, read/fetch tools) | "Available to Pro, Plus, Business, Enterprise, and Education accounts **on the web**." | [developer-mode.md](https://developers.openai.com/api/docs/guides/developer-mode.md) |
-| Plan (write/modify tools = "full MCP") | "Full MCP … including modify/write actions, is rolling out in **beta** to ChatGPT Business, Enterprise, and Edu plans" | [Developer mode and MCP apps in ChatGPT](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta) |
-| Policy | "Developer mode availability can depend on account and workspace policy." | [connect-chatgpt.md](https://developers.openai.com/plugins/deploy/connect-chatgpt.md) |
-| Risk label | Flagged **"Elevated risk"** | [developer-mode.md](https://developers.openai.com/api/docs/guides/developer-mode.md) |
-
-**The two OpenAI pages disagree, and the help centre's own FAQ reconciles most of it.** `developers.openai.com` lists five plans flatly; the help centre says *"Apps, full MCP support and developer mode is available for ChatGPT Business and Enterprise/Edu customers on ChatGPT web"* — then splits the difference: *"Pro users can build apps using the Apps SDK. Full MCP is only available to Business and Enterprise/Edu users, currently. **Pro users can connect MCPs with read/fetch permissions in developer mode.**"* Act on the split: **read/fetch tools** = Pro and up; **write tools** = Business/Enterprise/Edu only, in beta. Residual conflict, stated honestly: the help centre never mentions **Plus** at all, so a Plus account's read-only access rests solely on the developers.openai.com line — take the stricter reading before you promise it to anyone. Free is absent from both lists, so Free is out. **Web only** — *"Are MCP apps available on mobile? No - web only."* Two more limits from the same FAQ: *"Agent mode will not use custom apps. Deep research can use custom apps, but for read/fetch actions only - not for write actions."*
-
-Not purely a plan question either — *"Developer mode availability can depend on account and workspace policy."* The admin-side switch is at **Workspace Settings → Permissions & Roles → Connected Data Developer mode / Create custom MCP connectors**, after which *"Enabled users then turn it on in Settings → Apps → Advanced Settings"*. That maps to the step-2 path as **admin-side vs user-side**, confirmed 2026-08-15: on Business and Enterprise an admin opens the gate at **Workspace Settings → Permissions & Roles → Connected Data**, and each enabled user then turns it on for themselves. What has moved is the *user* path — current sources put it at **Settings → Apps → Advanced settings**, with **Settings → Connectors → Advanced settings** appearing in slightly older write-ups; the **Settings → Security and login** wording on OpenAI's developer pages is corroborated nowhere else and is likely stale. Try Apps first, then Connectors. The help article itself was also renamed — same id `12584461`, now *"Developer mode and MCP apps in ChatGPT"* rather than *"…apps and full MCP connectors…"* — so match on the id, not the slug.
+Check the [current availability and workspace permissions](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) before promising access. Full MCP is documented for Business and Enterprise/Edu on web; Pro has read/fetch access. Business creation is restricted to admins/owners; Enterprise/Edu may grant selected members creation rights. Only admins/owners publish workspace apps. Plus/Free eligibility is not established by this source; check the actual account.
 
 ## What ChatGPT demands that Claude Code and Cursor do not
 
 | Requirement | ChatGPT | Claude Code / Cursor |
 |---|---|---|
-| A global toggle before you can add anything | **Developer mode** | no equivalent |
+| Creation permission | account/workspace policy; current Plugins flow has no global toggle prerequisite | local client configuration |
 | Paid plan, web surface | yes | any account, local |
 | Auth | OAuth / none / mixed **only** | paste any header you like |
 | Reachability | public HTTPS, or Secure MCP Tunnel | `localhost` and `stdio` are fine |
@@ -74,7 +64,7 @@ Full per-host comparison: [`../shared/clients.md`](../shared/clients.md). If a t
 
 ## Using it, and iterating
 
-- **Test a personal plugin:** `https://chatgpt.com/plugins?view=personal` → open it → plus button to install → back to `https://chatgpt.com` → switch the top tab from **Chat** to **Work** → new Work chat → type `@` and pick the plugin. Alternatively, choose **Developer mode** from the Plus menu and select apps for that conversation.
+- **Test the plugin:** install it, start a new conversation and `@`-mention it; use the [current connection/test flow](https://developers.openai.com/plugins/deploy/connect-chatgpt).
 - **Confirmations:** "Write actions by default require confirmation… We respect the `readOnlyHint` tool annotation… **Tools without this hint are treated as write actions.**" Annotate properly ([`../shared/tool-design.md`](../shared/tool-design.md)) or every read prompts.
 - **After you redeploy:** open the connection at `https://chatgpt.com/plugins` → **Refresh** → confirm the advertised metadata changed → start a *new* conversation and re-test. Dev mode also lets you toggle individual tools on/off.
 - **Raw debugging:** `https://platform.openai.com/playground` → Tools → Add → MCP Server → enter the HTTPS endpoint and inspect request/response.
@@ -82,7 +72,7 @@ Full per-host comparison: [`../shared/clients.md`](../shared/clients.md). If a t
 
 ## Package the verified connection only when distribution needs it
 
-A successful developer-mode connection is enough for personal use. A repository/local plugin bundle is a separate step: `.codex-plugin/plugin.json`, a real `.app.json` mapping the connection id, and optional skills/assets/local MCP config. Follow [`package.md`](./package.md); do not hand-copy fragments from the public-submission form.
+A successful live connection is enough for personal use. A repository/local plugin bundle is a separate step: `.codex-plugin/plugin.json`, a real `.app.json` mapping the connection id, and optional skills/assets/local MCP config. Follow [`package.md`](./package.md); do not hand-copy fragments from the public-submission form.
 
 ## Private servers: Secure MCP Tunnel
 

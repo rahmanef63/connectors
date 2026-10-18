@@ -16,7 +16,7 @@ A "marketplace" is one JSON file in a git repo. Users add it with `/plugin marke
 | `name` | **yes** | kebab-case, public-facing: `/plugin install x@THIS`. Re-adding a name replaces the old marketplace |
 | `owner` | **yes** | object; `owner.name` required, `email`/`url` optional |
 | `plugins` | **yes** | array of entries |
-| `$schema` | no | ignored at load. Anthropic's catalog uses `https://anthropic.com/claude-code/marketplace.schema.json` |
+| `$schema` | no | editor autocomplete only; ignored at load. Omit when no verified schema URL is available; use the [official field reference](https://code.claude.com/docs/en/plugins/marketplace-reference#top-level-fields) and `claude plugin validate` (checked 2026-10-18) |
 | `description`, `version` | no | |
 | `metadata.pluginRoot` | no | base dir prepended to relative sources, e.g. `"./plugins"` |
 | `allowCrossMarketplaceDependenciesOn` | no | other marketplaces your plugins may depend on |

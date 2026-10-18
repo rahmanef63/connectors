@@ -84,7 +84,7 @@ for (const rel of required) {
   if (!existsSync(full)) continue;
   const text = readFileSync(full, "utf8");
   if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(text)) failures.push(`${rel}: private-key material detected`);
-  if (/\b(?:sk|ghp|github_pat|xox[baprs])_[A-Za-z0-9_-]{16,}\b/.test(text)) failures.push(`${rel}: secret-shaped token detected`);
+  if (/\b(?:(?:sk|xox[baprs])[-_]|(?:ghp|github_pat)_)[A-Za-z0-9_-]{16,}\b/.test(text)) failures.push(`${rel}: secret-shaped token detected`);
   const appIds = text.match(/\bplugin_asdk_app_[A-Za-z0-9_-]{8,}\b/g) ?? [];
   for (const id of appIds) {
     if (!/^plugin_asdk_app_(?:ID_FROM_CHATGPT|PLACEHOLDER|EXAMPLE|REPLACE_ME|0+)$/i.test(id)) {

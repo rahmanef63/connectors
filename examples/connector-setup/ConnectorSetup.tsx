@@ -4,10 +4,10 @@
  * Drop this into any app's settings page. The ONLY thing you supply is the
  * `ConnectorConfig`; every string in every tab derives from it.
  *
- * Read it from the environment, so the same build serves staging and
- * production and nothing about a deployment is compiled in:
+ * Pass an explicitly exposed public environment record (see the README).
+ * On the server, process.env is available; client bundlers need literal reads:
  *
- *   <ConnectorSetup config={connectorConfigFromEnv(process.env)} />
+ *   <ConnectorSetup config={connectorConfigFromEnv(publicEnv)} />
  *
  * ...or pass it literally when the values are already in hand:
  *
@@ -53,8 +53,8 @@ export interface ConnectorConfig {
   /** Only read when `dcr` is false. */
   clientId?: string;
   clientSecret?: string;
-  /** A bearer for the header-based clients (Claude Code, Cursor, curl).
-   *  Pass null while none has been minted — those tabs then say so. */
+  /** Legacy input accepted for compatibility; never embedded in copy templates.
+   *  Keep bearer reveal/minting in your authenticated per-user token UI. */
   token?: string | null;
   /** True only if you serve an OIDC discovery document. Almost nobody does;
    *  MCP does not need it. */
@@ -63,14 +63,13 @@ export interface ConnectorConfig {
   endpoints?: Partial<Record<"authorize" | "token" | "register" | "asBase" | "resource", string>>;
 }
 
-/* Bundlers inline `process.env.X` only for literal member reads, so the caller
- * hands the record in. Prefixes are tried in order — whichever your framework
- * exposes to the browser wins. */
+/* This helper reads a supplied record; it does not load .env or expose values.
+ * Next.js client callers must construct it with literal process.env.X reads.
+ * Prefixes are tried in order. */
 const PREFIXES = ["NEXT_PUBLIC_", "VITE_", "PUBLIC_", "REACT_APP_", ""] as const;
 
 /**
- * Build the config from environment variables, so a deployment is configuration
- * and not a code change.
+ * Build the config from an explicitly supplied public environment record.
  *
  *   MCP_SERVER_NAME   required   shown in the host's connector list
  *   MCP_ORIGIN        required   origin serving /mcp and the .well-known docs
@@ -124,7 +123,7 @@ export function resolveConnector(c: ConnectorConfig) {
     ...c,
     origin,
     server,
-    slug: c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+    slug: c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "server",
     authorize: e.authorize ?? `${origin}/oauth/authorize`,
     token: e.token ?? `${origin}/oauth/token`,
     register: e.register ?? (c.dcr ? `${origin}/oauth/register` : ""),
@@ -198,7 +197,7 @@ function chatgpt(c: Resolved): Guide {
           field: "Registration method",
           verdict: "pick",
           value: "User-Defined OAuth Client",
-          note: "DCR and CIMD will read “(Unavailable)” — this server does not offer them.",
+          note: "DCR is disabled in this example. If your server supports CIMD, use its metadata flow instead of this manual-client recipe.",
         },
         { field: "Client ID", verdict: "paste", value: c.clientId ?? "", note: c.clientId ? undefined : "Create a client first — no id configured." },
         ...(c.clientSecret ? [{ field: "Client Secret", verdict: "paste" as const, value: c.clientSecret }] : []),
@@ -207,7 +206,7 @@ function chatgpt(c: Resolved): Guide {
   return {
     id: "chatgpt",
     host: "ChatGPT",
-    path: "Settings → Apps → Advanced settings → Developer mode, then Plugins → +",
+    path: "Plugins → + → Add custom MCP server",
     lede:
       "Paste the Server URL and ChatGPT discovers everything else from your .well-known documents. The advanced panel is a fallback for when that discovery fails — an empty field there is the only reason to touch it.",
     groups: [
@@ -254,7 +253,7 @@ function chatgpt(c: Resolved): Guide {
       },
       {
         title: "4 · OAuth endpoints",
-        note: "Discovered from the server. Compare them against these — if one is blank, paste it; if one differs, your discovery document is wrong, and fixing it there beats patching it here.",
+        note: "Discovered from the server. Compare them against these — if one is blank, paste it; if one differs, your discovery document may use different paths or a separate authorization server. Check the deployed metadata and configure endpoint overrides before changing it.",
         rows: [
           { field: "Auth URL", verdict: "auto", value: c.authorize },
           { field: "Token URL", verdict: "auto", value: c.token },
@@ -292,12 +291,12 @@ function chatgpt(c: Resolved): Guide {
         rows: [
           { field: "Icon (optional)", verdict: "skip", note: "PNG only, 256×256 or larger, 10 KB max. Purely cosmetic." },
           { field: "I understand and want to continue", verdict: "tick", note: "Create stays disabled until this is checked." },
-          { field: "Create", verdict: "pick", note: "Then run Scan Tools. The app lands in Drafts." },
+          { field: "Create as a plugin", verdict: "pick", note: "Review the discovered tools, then install and test in a new conversation. Legacy Apps screens use Scan Tools → Create." },
         ],
       },
     ],
     traps: [
-      "Developer mode is web only, and the setting has moved — if Settings → Apps has no Advanced settings, look under Settings → Security and login.",
+      "Account and workspace permissions control creation. Older Apps screens differ from the current Plugins flow.",
       "Scan Tools failing with every tool missing usually means the descriptor is malformed, not that auth is wrong. A 401 at this stage is normal and expected.",
     ],
   };
@@ -343,13 +342,15 @@ function claudeAi(c: Resolved): Guide {
   };
 }
 
+function shellQuote(value: string) { return "'" + value.replace(/'/g, "'\\''") + "'"; }
+
 function claudeCode(c: Resolved): Guide {
-  const tok = c.bearer ?? "MCP_TOKEN";
+  const tok = "${MCP_TOKEN:?Set MCP_TOKEN in your shell first}";
   return {
     id: "claude-code",
     host: "Claude Code",
-    path: "your terminal, or .mcp.json at the repo root",
-    lede: "The only host here with a real credential field, so this one takes a bearer directly.",
+    path: "Bash / POSIX shell, or .mcp.json at the repo root",
+    lede: "Set MCP_TOKEN in your shell, then use the command or the project config below.",
     groups: [
       {
         title: "Option A · one command",
@@ -357,8 +358,8 @@ function claudeCode(c: Resolved): Guide {
           {
             field: "terminal",
             verdict: "paste",
-            value: `claude mcp add --transport http ${c.slug} ${c.server} \\\n  --header "Authorization: Bearer ${tok}"`,
-            note: "Adding does not validate anything. Run /mcp afterwards; a bad token shows as failed.",
+            value: `claude mcp add --transport http ${shellQuote(c.slug)} ${shellQuote(c.server)} \\\n  --header "Authorization: Bearer ${tok}"`,
+            note: "Requires MCP_TOKEN in your shell. This saves the header in local client configuration; keep that file private. Run /mcp afterwards to validate.",
           },
         ],
       },
@@ -416,11 +417,11 @@ function cursor(c: Resolved): Guide {
 }
 
 function smoke(c: Resolved): Guide {
-  const tok = c.bearer ?? "MCP_TOKEN";
+  const tok = "${MCP_TOKEN:?Set MCP_TOKEN in your shell first}";
   return {
     id: "verify",
     host: "Verify",
-    path: "any terminal",
+    path: "Bash / POSIX shell",
     lede: "Run this before blaming a host. It proves DNS, TLS, routing and the auth gate in one call.",
     groups: [
       {
@@ -429,7 +430,7 @@ function smoke(c: Resolved): Guide {
           {
             field: "curl",
             verdict: "paste",
-            value: `curl -sS -i -X POST ${c.server} \\\n  -H "Content-Type: application/json" \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'`,
+            value: `curl -sS -i -X POST ${shellQuote(c.server)} \\\n  -H "Accept: application/json, text/event-stream" \\\n  -H "Content-Type: application/json" \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'`,
             note: "A 401 with a WWW-Authenticate header is a PASS: the server is up and the auth gate works. You are ruling out 404 and a timeout.",
           },
         ],
@@ -437,22 +438,19 @@ function smoke(c: Resolved): Guide {
       {
         title: "Does discovery work?",
         note: "If ChatGPT's advanced fields come up blank, this is the document that failed.",
-        rows: [{ field: "curl", verdict: "paste", value: `curl -sS ${c.protectedResource}` }],
+        rows: [{ field: "curl", verdict: "paste", value: `curl -sS ${shellQuote(c.protectedResource)}` }],
       },
-      ...(c.bearer
-        ? [
-            {
-              title: "With your token",
+      {
+              title: "Authenticated initialize probe",
+              note: "Requires MCP_TOKEN. For tools/list and tool calls, use MCP Inspector or an SDK to complete initialization and preserve session headers.",
               rows: [
                 {
                   field: "curl",
                   verdict: "paste" as const,
-                  value: `curl -sS -X POST ${c.server} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${tok}" \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`,
+                  value: `curl -sS -X POST ${shellQuote(c.server)} \\\n  -H "Accept: application/json, text/event-stream" \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${tok}" \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'`,
                 },
               ],
-            },
-          ]
-        : []),
+      },
     ],
   };
 }

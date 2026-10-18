@@ -68,7 +68,7 @@ flowchart TD
     W -->|"the public"| P["<b>cn-gpt-plugin/</b><br/>publish.md — reviewed"]
 ```
 
-Stop at the first box that answers your question. Most people never reach the bottom row: a server you use yourself needs `phase-1` and `register.md` and nothing else.
+Stop at the first box that answers your question. For private use in a header-configured client such as Claude Code or Cursor, Phase 1 bearer auth can be enough. A private ChatGPT or claude.ai connection still needs OAuth and discovery before registration, even when only you use it; follow the [host auth gate](./cn-gpt-plugin/README.md#the-gate-that-stops-most-builds).
 
 Each folder's `README.md` is the orientation and the decision table; the files beside it are the deep ones you open only once you have decided:
 
@@ -91,9 +91,13 @@ Fourteen cross-cutting files, read alongside whichever folder you picked — too
 
 The cookbook itself now verifies what can drift mechanically:
 
+The example suite needs Bash and [Node 22.13+ on 22.x or 23.2+](https://nodejs.org/api/module.html#modulestriptypescripttypescode-options), which provides `module.stripTypeScriptTypes`; Node 24+ is a convenient baseline.
+
 ```bash
 node scripts/check-docs.mjs
 node scripts/check-builder-skill.mjs
+node --test scripts/test/*.test.mjs
+node --test examples/connector-setup/connector-setup.test.mjs
 cd packages/mcp-files && npm ci --include=dev && npm run typecheck && npm test && npm run build
 ```
 
@@ -122,7 +126,7 @@ Six open questions, listed here rather than left buried inline. Every one is mar
 | 5 | OpenAI's **recommended icon dimension**, and whether one file may serve as both `logo` and `composerIcon` | [`shared/icons.md`](./shared/icons.md) | Only a 48×48 floor and a 4096×4096 ceiling are published, so the 512/1024 sizes in that file are engineering judgement. Both fields are required and validated independently, so one square PNG *should* satisfy every published rule — untested, and cheap to test by submitting. |
 | 6 | Does **any shipping host render `serverInfo.icons`**? | [`shared/icons.md`](./shared/icons.md) | Narrowed, not closed: `Icon` first exists in the `2025-11-25` schema, while earlier revisions have no such type. Treat it as inert for a connection that negotiates an older revision, and unverified until a host documents rendering it. |
 
-Four of the six are OpenAI questions, and that is not a coincidence: `developers.openai.com` is fetchable and generally good, but `help.openai.com` now sits behind a Cloudflare bot challenge that refuses `curl` and real headless Chromium alike (re-tested 2026-08-15). Anything only the help centre knows is currently out of reach from a server. See [`AGENTS.md`](./AGENTS.md) for what works instead.
+Four of the six are OpenAI questions. Earlier audits hit help-centre bot challenges; the current connection article was readable through a rendering fetch on 2026-10-18. Fetching behavior varies, so retry the current primary source before assuming a question is blocked. See [`AGENTS.md`](./AGENTS.md) for source-handling guidance.
 
 **Closing one is welcome.** The bar is a primary source or a reproducible observation — a vendor page, a schema file, a package's source, or "I submitted this and here is what happened". Replace the inline marker with the finding and the date, and delete the row here. A confident guess is worse than the open question, which is the whole reason these are visible.
 
