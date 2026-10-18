@@ -88,6 +88,20 @@ describe("assertFileParamsConformant", () => {
     ).toThrow(/not a conformant file object/);
   });
 
+  it("requires all file properties to declare string types", () => {
+    for (const field of ["download_url", "file_id", "mime_type", "file_name"]) {
+      for (const type of ["number", "object", undefined]) {
+        const bad = openAIFileSchema() as { properties: Record<string, unknown> };
+        bad.properties[field] = type === undefined ? {} : { type };
+        expect(isConformantFileObject(bad), `${field}: ${type}`).toBe(false);
+        expect(() => assertFileParamsConformant({
+          inputSchema: { type: "object", properties: { file: bad } },
+          _meta: fileParamsMeta(["file"]),
+        })).toThrow(/not a conformant file object/);
+      }
+    }
+  });
+
   it("catches over-requiring — mime_type must not be required", () => {
     const bad = openAIFileSchema() as { required: string[] };
     bad.required.push("mime_type");

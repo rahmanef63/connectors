@@ -112,10 +112,10 @@ export async function ingestOpenAIFile(file: OpenAIFile, opts: IngestOptions): P
         { correlationId },
       );
     }
-    // A body whose content disagrees with its own header is refused outright.
-    // Either side could be the lie, so trusting either one is the bug.
+    // Generic binary downloads have no specific type claim. Any specific
+    // declaration must agree with the signature, even outside the allowlist.
     const declaredMime = normalizeMime(res!.headers.get("content-type"));
-    if (declaredMime && declaredMime !== sniffed && policy.allowedMimeTypes.includes(declaredMime)) {
+    if (declaredMime && declaredMime !== "application/octet-stream" && declaredMime !== sniffed) {
       throw new ConnectorError(
         "unsupported_media_type",
         "The file's contents do not match the type it claims to be.",

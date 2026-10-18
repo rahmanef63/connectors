@@ -85,7 +85,7 @@ export function toConnectorError(e: unknown, correlationId?: string): ConnectorE
       ? e
       : new ConnectorError(e.code, e.message, { fields: e.fields, correlationId, internal: e.internal });
   }
-  return new ConnectorError("internal", "The operation failed. Nothing was changed.", {
+  return new ConnectorError("internal", "The operation failed.", {
     correlationId,
     internal: e,
   });

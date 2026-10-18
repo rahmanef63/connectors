@@ -50,6 +50,27 @@ describe("checkUrl", () => {
     expect(reject("https://[fe80::1]/x.png")).toBe("private-address");
   });
 
+  it("rejects mapped IPv4 private literals and all IPv6 link-local prefixes", () => {
+    for (const h of [
+      "[::ffff:127.0.0.1]", "[::ffff:169.254.169.254]", "[::ffff:10.1.2.3]",
+      "[::ffff:192.168.1.1]", "[::ffff:172.16.0.1]", "[::ffff:100.64.0.1]",
+      "[::ffff:0.0.0.0]", "[::ffff:7f00:1]", "[::]", "[fc00::1]",
+      "[fe80::1]", "[fe90::1]", "[fea0::1]", "[febf::1]",
+    ]) expect(reject(`https://${h}/x.png`), h).toBe("private-address");
+  });
+
+  it("normalises a trailing DNS dot before checking local names", () => {
+    for (const h of ["localhost.", "cdn.localhost.", "printer.local.", "svc.internal.", "metadata.google.internal."]) {
+      expect(reject(`https://${h}/x.png`), h).toBe("private-address");
+    }
+  });
+
+  it("accepts public hosts sharing IPv6 prefixes and public mapped IPv4", () => {
+    for (const h of ["fd.example", "fcdn.example", "fe80.example", "[::ffff:8.8.8.8]", "[2001:4860:4860::8888]"]) {
+      expect(checkUrl(`https://${h}/x.png`, imagePolicy).ok, h).toBe(true);
+    }
+  });
+
   it("refuses credentials embedded in the URL", () => {
     expect(reject("https://user:pass@evil.example.com/x.png")).toBe("credentials-in-url");
   });
@@ -115,6 +136,16 @@ describe("ingestOpenAIFile — SSRF and payload guards", () => {
     await expect(ingest(f)).rejects.toMatchObject({ code: "url_rejected" });
   });
 
+  it("rejects redirects to mapped private IPv4 without fetching the target", async () => {
+    let calls = 0;
+    const f = (async () => {
+      calls++;
+      return new Response(null, { status: 302, headers: { location: "https://[::ffff:127.0.0.1]/x.png" } });
+    }) as typeof fetch;
+    await expect(ingest(f)).rejects.toMatchObject({ code: "url_rejected" });
+    expect(calls).toBe(1);
+  });
+
   it("re-validates every hop, not just the first", async () => {
     const f = fakeFetch({
       "https://files.example.com/a.png": { redirectTo: "https://cdn.example.com/b.png" },
@@ -151,6 +182,20 @@ describe("ingestOpenAIFile — SSRF and payload guards", () => {
   it("rejects a body whose content contradicts its own header", async () => {
     const f = fakeFetch({ "https://files.example.com/a.png": { body: jpeg(), type: "image/png" } });
     await expect(ingest(f)).rejects.toThrow(/do not match the type it claims/);
+  });
+
+  it("rejects contradictory specific MIME declarations outside the policy", async () => {
+    for (const type of ["text/html", "application/pdf", "image/svg+xml"]) {
+      const f = fakeFetch({ "https://files.example.com/a.png": { body: png(), type } });
+      await expect(ingest(f)).rejects.toMatchObject({ code: "unsupported_media_type" });
+    }
+  });
+
+  it("accepts absent or generic binary MIME declarations using the signature", async () => {
+    for (const type of [undefined, "application/octet-stream"]) {
+      const f = fakeFetch({ "https://files.example.com/a.png": { body: png(), type } });
+      await expect(ingest(f)).resolves.toMatchObject({ mimeType: "image/png" });
+    }
   });
 
   it("rejects a type outside the policy even when it is a real file", async () => {

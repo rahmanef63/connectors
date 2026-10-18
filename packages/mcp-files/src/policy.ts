@@ -70,8 +70,15 @@ export function checkUrl(raw: string, policy: FetchPolicy): { ok: true; url: URL
     return { ok: false, reason: "port-not-allowed" };
   }
 
-  const h = url.hostname.toLowerCase();
-  const bracketless = h.startsWith("[") && h.endsWith("]") ? h.slice(1, -1) : h;
+  const h = url.hostname.toLowerCase().replace(/\.$/, "");
+  const isV6 = h.startsWith("[") && h.endsWith("]");
+  const v6 = isV6 ? h.slice(1, -1) : "";
+  // URL canonicalises mapped IPv4 literals to two hexadecimal groups.
+  const mappedV4 = /^::ffff:([0-9a-f]+):([0-9a-f]+)$/.exec(v6);
+  const mappedAddress = mappedV4
+    ? [parseInt(mappedV4[1]!, 16) >>> 8, parseInt(mappedV4[1]!, 16) & 255,
+       parseInt(mappedV4[2]!, 16) >>> 8, parseInt(mappedV4[2]!, 16) & 255].join(".")
+    : "";
   const isPrivate =
     h === "localhost" ||
     h.endsWith(".localhost") ||
@@ -79,10 +86,13 @@ export function checkUrl(raw: string, policy: FetchPolicy): { ok: true; url: URL
     h.endsWith(".internal") ||
     h === "metadata.google.internal" ||
     PRIVATE_V4.test(h) ||
-    bracketless === "::1" ||
-    bracketless.startsWith("fd") ||
-    bracketless.startsWith("fc") ||
-    bracketless.startsWith("fe80");
+    (isV6 && (
+      v6 === "::" ||
+      v6 === "::1" ||
+      /^f[cd][0-9a-f]{2}:/.test(v6) ||
+      /^fe[89ab][0-9a-f]:/.test(v6) ||
+      (mappedAddress !== "" && PRIVATE_V4.test(mappedAddress))
+    ));
   if (isPrivate) return { ok: false, reason: "private-address" };
 
   return { ok: true, url };

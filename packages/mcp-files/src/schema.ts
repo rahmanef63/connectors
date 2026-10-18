@@ -74,6 +74,10 @@ export function isConformantFileObject(schema: unknown): boolean {
   if (s.type !== "object" || !s.properties) return false;
   const props = Object.keys(s.properties).sort();
   if (props.join(",") !== "download_url,file_id,file_name,mime_type") return false;
+  for (const name of props) {
+    const property = s.properties[name];
+    if (!property || typeof property !== "object" || (property as { type?: unknown }).type !== "string") return false;
+  }
   if (!Array.isArray(s.required)) return false;
   return [...s.required].sort().join(",") === "download_url,file_id";
 }
