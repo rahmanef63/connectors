@@ -1,0 +1,142 @@
+{
+  "contractVersion": "1.0.0",
+  "id": "connectors",
+  "name": "Connectors cookbook and MCP files",
+  "version": "0.1.0",
+  "kind": "guidance",
+  "runtime": {
+    "language": "typescript",
+    "minimumVersion": "22.13",
+    "manager": "node"
+  },
+  "source": {
+    "repository": "rahmanef63/connectors",
+    "revision": "0323cf5b4b69e5190aa908605228bdd7cccf9142",
+    "channel": "review-candidate"
+  },
+  "layout": {
+    "source": [
+      "packages/mcp-files/src",
+      "scripts"
+    ],
+    "tests": [
+      "scripts/test",
+      "examples/connector-setup/connector-setup.test.mjs",
+      "packages/mcp-files/test"
+    ],
+    "docs": [
+      "README.md",
+      "AGENTS.md",
+      "cn-mcp-core",
+      "shared",
+      "cn-claude-plugin",
+      "cn-gpt-plugin",
+      "cn-gpts"
+    ]
+  },
+  "commands": {
+    "check": [
+      [
+        "node",
+        "scripts/check-docs.mjs"
+      ],
+      [
+        "node",
+        "scripts/check-builder-skill.mjs"
+      ],
+      [
+        "npm",
+        "--prefix",
+        "packages/mcp-files",
+        "run",
+        "typecheck"
+      ]
+    ],
+    "test": [
+      [
+        "node",
+        "--test",
+        "scripts/test/check-docs.test.mjs"
+      ],
+      [
+        "node",
+        "--test",
+        "examples/connector-setup/connector-setup.test.mjs"
+      ],
+      [
+        "npm",
+        "--prefix",
+        "packages/mcp-files",
+        "test"
+      ]
+    ],
+    "build": [
+      [
+        "npm",
+        "--prefix",
+        "packages/mcp-files",
+        "run",
+        "build"
+      ],
+      [
+        "npm",
+        "--prefix",
+        "packages/mcp-files",
+        "run",
+        "bundle:single"
+      ]
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "connectors.file-schema",
+      "summary": "Build the pure OpenAI file-object JSON Schema from the shared package. This capability does not fetch, store or attach a file.",
+      "input": {
+        "format": "none",
+        "ref": null
+      },
+      "output": {
+        "format": "typescript",
+        "ref": "packages/mcp-files/src/schema.ts#JsonSchema"
+      },
+      "effects": [
+        "none"
+      ],
+      "requiredScopes": [],
+      "mode": "preview",
+      "risk": "read"
+    }
+  ],
+  "trust": {
+    "identityAuthority": "none",
+    "tenantBoundary": "consumer-owned",
+    "secretOwner": "none",
+    "sandbox": "none"
+  },
+  "config": {
+    "profile": "guidance",
+    "secrets": "references-only",
+    "defaultMode": "preview",
+    "network": "explicit-adapter"
+  },
+  "health": {
+    "kind": "not-a-service",
+    "path": null
+  },
+  "extensions": {
+    "manef:native-contracts": {
+      "connectors.file-schema": {
+        "source": "packages/mcp-files/src/schema.ts#openAIFileSchema",
+        "package": "packages/mcp-files/package.json",
+        "input": "No arguments; returns a cloned JSON Schema object."
+      }
+    },
+    "manef:version-provenance": "0.1.0 is the portable @rahmanef/mcp-files package version. The cookbook root has no package manifest or separate release version.",
+    "manef:boundaries": [
+      "Cookbook guides are canonical guidance, not a hosted service or product runtime.",
+      "File ingestion and storage are separate capabilities, excluded here; consumers own authentication, resource ownership and storage/attach transactions.",
+      "Generated plugin packaging belongs in each consumer project, not cookbook root."
+    ],
+    "manef:runtime-notes": "Root checks require Node22.13+ on22.x or23.2+ and Bash for setup tests. Native package-lock.json remains product-owned."
+  }
+}
