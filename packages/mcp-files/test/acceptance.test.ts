@@ -145,6 +145,7 @@ describe("acceptance: ChatGPT image -> consumer portfolio media", () => {
   });
 
   it("maps a consumer-side failure to a safe error with a correlation id", async () => {
+    const before = blobs.size;
     const err = await receiveFileIntoMedia({
       file: { download_url: "https://f.example/3", file_id: "file_3" },
       resourceId: "item_does_not_exist",
@@ -155,6 +156,8 @@ describe("acceptance: ChatGPT image -> consumer portfolio media", () => {
     }).catch((e) => e);
 
     expect(err.code).toBe("internal");
+    expect(blobs.size).toBe(before + 1);
+    expect(err.toPublic().message).toBe("The operation failed.");
     // the adapter's raw message named an internal id; the public shape must not
     expect(JSON.stringify(err.toPublic())).not.toContain("item_does_not_exist");
     expect(err.toPublic().correlation_id).toMatch(/^c_/);

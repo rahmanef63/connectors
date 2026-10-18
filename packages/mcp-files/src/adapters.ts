@@ -56,6 +56,9 @@ export interface MediaAttachAdapter {
  * adapter that discards the prior asset has, and its tool should be. That is a
  * property of the adapter, not of this function, so it cannot be decided here
  * — which is exactly why `previous` is part of the interface.
+ * Store and attach are separate operations: an attach failure may leave a
+ * stored file, and an adapter may fail after changing its own state. Consumers
+ * must supply transactions or cleanup when their product requires them.
  */
 export async function receiveFileIntoMedia(args: {
   file: OpenAIFile;

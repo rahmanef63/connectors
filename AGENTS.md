@@ -72,24 +72,19 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 - **The builder skill orchestrates; the guides stay SSOT.** Do not duplicate whole OAuth, transport or schema chapters into the skill. Route to the smallest canonical file instead.
 - **The worked example is at Phase 1, bearer only.** Its `convex/mcp/routes.ts` header comment defers OAuth 2.1 + PKCE to a later phase. Cite it with real paths and real snippets; never describe it as having OAuth today.
 
-## Two vendor doc sites refuse automated fetching
+## Vendor documentation fetching varies
 
-You will hit this the moment you try to verify a `TODO: verify` against Anthropic's or OpenAI's help centre.
+Prefer the vendor's current developer docs and follow their links rather than guessing replacement URLs. A successful HTTP response can still contain only a JS shell or bot challenge; read the article text before treating the fetch as evidence.
 
-- **`support.claude.com`** returns 200 to `curl`, but the body is a JS shell — the article text hydrates client-side, so a plain fetch reads as an empty page rather than as a failure. **A rendering fetch tool does read it** (verified 2026-08-15); reach for a browser only if yours does not.
-- **`help.openai.com` is behind a Cloudflare bot challenge and a browser no longer gets through.** Re-tested end to end on 2026-08-15: `curl` returns `403` with `cf-mitigated: challenge` and `server: cloudflare`; real headless Chromium with a warm-up navigation, a desktop UA and `navigator.webdriver` masked also returns `403`, and the challenge never clears — thirty seconds of polling, empty body throughout. The Playwright recipe that worked on 2026-08-13 is dead, at least from a datacenter IP. **Do not spend time on it.**
+Earlier audits (2026-08-15) hit JS hydration at `support.claude.com` and Cloudflare challenges at `help.openai.com`. These are historical observations, not permanent access rules. On 2026-10-18, a rendering fetch read OpenAI's [current connection article](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) successfully and confirmed its updated Plugins flow.
 
-  What does work: **search-engine snippets.** The article text is indexed, so a targeted web search returns the sentences you need, with the caveat that you are quoting an index rather than the page. Two of this repo's long-standing questions closed that way. Prefer a vendor's own developer-docs host over its help centre wherever both exist — `developers.openai.com` and `claude.com/docs` are both plain and fetchable.
-
-Also worth knowing: `claude.com/docs/*` is plain and fetchable, and it carries things the `support.claude.com` help articles do not — the Connectors Directory submission flow and the plugin submission rules both live there. Several long-standing gaps in this repo closed by looking there rather than at the help centre.
-
-Where a browser is needed: What worked: Playwright + Chromium, a **fresh browser context per page**, a warm-up navigation to the help-centre root first, then ~4s after `goto` and ~6s between pages. That took `help.openai.com` from 5-of-8 pages to 8-of-8. Do not conclude a page is gone because a fetch tool could not read it.
+Use a rendering fetch/browser when a plain fetch has no article body. If blocked, report the limitation and use an official developer-docs source where possible. Search-engine snippets are secondary evidence; identify them as such. Do not conclude a page is gone merely because one fetching method fails.
 
 ## Before you return
 
 1. Every path you cite resolves — in this repo and in the target codebase.
 2. Every host-specific claim is either sourced or marked `TODO: verify`. If you close one, delete its row from the **What is still unverified** table in [`README.md`](./README.md); if you open a new one, add a row. That table is the index and it goes stale silently.
 3. No server logic branches on the calling host.
-4. Run `node scripts/check-docs.mjs` and `node scripts/check-builder-skill.mjs`; when `packages/mcp-files/` changed, also run its locked install, typecheck, tests and build.
+4. Run `node scripts/check-docs.mjs`, `node scripts/check-builder-skill.mjs`, `node --test scripts/test/*.test.mjs` and `node --test examples/connector-setup/connector-setup.test.mjs` (Node 22.13+ on 22.x or 23.2+; Bash required for the setup suite); when `packages/mcp-files/` changed, also run its locked install, typecheck, tests and build.
 5. For implementation work, do not finish at source/build proof: verify the deployed MCP and refresh/rescan the actual host when the public contract changed.
 6. Report which files you actually read, so the next agent can skip them.

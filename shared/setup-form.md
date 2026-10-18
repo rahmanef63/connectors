@@ -19,7 +19,7 @@ It warns but does not fix, and it names the field without showing the value — 
 
 | Host | User pastes | Where | Token? |
 |---|---|---|---|
-| ChatGPT developer mode | `https://MCP_ORIGIN/mcp` | Plugins → **+** → Connection | **No** — OAuth / none / mixed only; ChatGPT "cannot present custom API keys" ([build/auth](https://developers.openai.com/plugins/build/auth.md)) |
+| ChatGPT custom MCP connection | `https://MCP_ORIGIN/mcp` | Plugins → **+** → Connection | **No** — OAuth / none / mixed only; ChatGPT "cannot present custom API keys" ([build/auth](https://developers.openai.com/plugins/build/auth.md)) |
 | claude.ai custom connector | `https://MCP_ORIGIN/mcp` | Customize → Connectors → **+** | No field; OAuth ID/secret under **Advanced settings** only |
 | Claude Code (CLI) | the `claude mcp add` line | terminal | Yes — `--header` |
 | Claude Code (project) | the JSON object | `.mcp.json` at repo root | Yes — `${MCP_TOKEN}` |
@@ -29,19 +29,19 @@ It warns but does not fix, and it names the field without showing the value — 
 
 ## Copy blocks
 
-### ChatGPT developer mode
+### ChatGPT custom MCP connection
 
-Enable it first, and show both paths because the docs disagree: **Settings → Security and login** ([developer-mode](https://developers.openai.com/api/docs/guides/developer-mode.md)) or **Workspace Settings → Permissions & Roles → Connected Data** then **Settings → Apps → Advanced Settings** ([help centre](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta)). Web only.
+Use **Plugins → + → Add custom MCP server**. The current Plugins flow has no Developer Mode toggle prerequisite; account/workspace policy still applies ([OpenAI connection guide](https://developers.openai.com/plugins/deploy/connect-chatgpt), checked 2026-10-18). Older Apps screens differ.
 
 ```
 https://MCP_ORIGIN/mcp
 ```
 
-The `/mcp` path is required, not inferred: "enter the MCP server URL, including the `/mcp` path" ([connect-chatgpt](https://developers.openai.com/plugins/deploy/connect-chatgpt.md)). Then **Scan Tools**, then **Create**; the app lands in **Drafts**.
+The `/mcp` path is required, not inferred: "enter the MCP server URL, including the `/mcp` path" ([connect-chatgpt](https://developers.openai.com/plugins/deploy/connect-chatgpt.md)). Configure authentication, acknowledge the risk warning and select **Create as a plugin**; review the discovered tools. Legacy Apps screens use **Scan Tools → Create** and drafts.
 
 #### The modal's actual fields
 
-Transcribed from the **New Plugin** modal, 2026-08-15. This supersedes the `Client ID`/`Token URL` labels in [`./clients.md`](./clients.md), which come from the GPT Actions editor — a different surface with different names.
+Advanced field labels below were transcribed from the **New Plugin** modal, 2026-08-15; current creation steps were checked 2026-10-18. Use [`./clients.md`](./clients.md) for host capabilities.
 
 | Field | Who fills it |
 |---|---|

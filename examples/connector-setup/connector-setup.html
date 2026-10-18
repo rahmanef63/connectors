@@ -134,22 +134,24 @@ var CONFIG = {
   clientId: "",
   clientSecret: "",
   token: null,
-  oidc: false
+  oidc: false,
+  endpoints: {}
 };
 
 function resolveConnector(c) {
   var origin = c.origin.replace(/\/+$/, "");
   var server = origin + (c.mcpPath || "/mcp");
+  var e = c.endpoints || {};
   return {
     name: c.name, description: c.description, scopes: c.scopes, dcr: c.dcr,
     clientId: c.clientId, clientSecret: c.clientSecret, oidc: c.oidc,
     origin: origin, server: server,
     slug: c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "server",
-    authorize: origin + "/oauth/authorize",
-    token: origin + "/oauth/token",
-    register: c.dcr ? origin + "/oauth/register" : "",
-    asBase: origin,                                  // RFC 9728 authorization_servers[0]
-    resource: server,                                // RFC 8707 — the endpoint, not the origin
+    authorize: e.authorize || origin + "/oauth/authorize",
+    token: e.token || origin + "/oauth/token",
+    register: e.register || (c.dcr ? origin + "/oauth/register" : ""),
+    asBase: e.asBase || origin,                                  // RFC 9728 authorization_servers[0]
+    resource: e.resource || server,                                // RFC 8707 — the endpoint, not the origin
     protectedResource: origin + "/.well-known/oauth-protected-resource",
     bearer: c.token || null
   };
@@ -163,13 +165,15 @@ var VERDICT = {
   skip:  { label: "leave blank", hint: "Do not fill this in" }
 };
 
+function shellQuote(value) { return "'" + value.replace(/'/g, "'\\''") + "'"; }
+
 /* ── guides ─────────────────────────────────────────────────────────── */
 function guides(c) {
   var reg = c.dcr
     ? [{ field: "Registration method", verdict: "pick", value: "Dynamic Client Registration (DCR)",
          note: "This server supports DCR, so no client id is needed. If the option reads “(Unavailable)”, ChatGPT could not discover the Registration URL — paste it below, close the modal, and reopen it." }]
     : [{ field: "Registration method", verdict: "pick", value: "User-Defined OAuth Client",
-         note: "DCR and CIMD will read “(Unavailable)” — this server does not offer them." },
+         note: "DCR is disabled in this example. If your server supports CIMD, use its metadata flow instead of this manual-client recipe." },
        { field: "Client ID", verdict: "paste", value: c.clientId,
          note: c.clientId ? "" : "Create a client first — no id configured." }]
       .concat(c.clientSecret ? [{ field: "Client Secret", verdict: "paste", value: c.clientSecret }] : []);
@@ -184,11 +188,11 @@ function guides(c) {
        { field: "OIDC userinfo endpoint", verdict: "skip" },
        { field: "OIDC scopes supported", verdict: "skip" }];
 
-  var tok = c.bearer || "MCP_TOKEN";
+  var tok = "${MCP_TOKEN:?Set MCP_TOKEN in your shell first}";
 
   return [
     { id: "chatgpt", host: "ChatGPT",
-      path: "Settings → Apps → Advanced settings → Developer mode, then Plugins → +",
+      path: "Plugins → + → Add custom MCP server",
       lede: "Paste the Server URL and ChatGPT discovers everything else from your .well-known documents. The advanced panel is a fallback for when that discovery fails — an empty field there is the only reason to touch it.",
       groups: [
         { title: "1 · The two fields you actually fill", rows: [
@@ -205,7 +209,7 @@ function guides(c) {
           { field: "Base scopes", verdict: "skip", note: "Requested on top of the default scopes on every auth request. This server has no scope that needs to be present unconditionally." }
         ]},
         { title: "4 · OAuth endpoints",
-          note: "Discovered from the server. Compare them against these — if one is blank, paste it; if one differs, your discovery document is wrong, and fixing it there beats patching it here.",
+          note: "Discovered from the server. Compare them against these — if one is blank, paste it; if one differs, your discovery document may use different paths or a separate authorization server. Check the deployed metadata and configure endpoint overrides before changing it.",
           rows: [
             { field: "Auth URL", verdict: "auto", value: c.authorize },
             { field: "Token URL", verdict: "auto", value: c.token },
@@ -221,11 +225,11 @@ function guides(c) {
         { title: "6 · Finish", rows: [
           { field: "Icon (optional)", verdict: "skip", note: "PNG only, 256×256 or larger, 10 KB max. Purely cosmetic." },
           { field: "I understand and want to continue", verdict: "tick", note: "Create stays disabled until this is checked." },
-          { field: "Create", verdict: "pick", note: "Then run Scan Tools. The app lands in Drafts." }
+          { field: "Create as a plugin", verdict: "pick", note: "Review the discovered tools, then install and test in a new conversation. Legacy Apps screens use Scan Tools → Create." }
         ]}
       ],
       traps: [
-        "Developer mode is web only, and the setting has moved — if Settings → Apps has no Advanced settings, look under Settings → Security and login.",
+        "Account and workspace permissions control creation. Older Apps screens differ from the current Plugins flow.",
         "Scan Tools failing with every tool missing usually means the descriptor is malformed, not that auth is wrong. A 401 at this stage is normal and expected."
       ]},
 
@@ -250,13 +254,13 @@ function guides(c) {
       ]},
 
     { id: "claude-code", host: "Claude Code",
-      path: "your terminal, or .mcp.json at the repo root",
-      lede: "The only host here with a real credential field, so this one takes a bearer directly.",
+      path: "Bash / POSIX shell, or .mcp.json at the repo root",
+      lede: "Set MCP_TOKEN in your shell, then use the command or the project config below.",
       groups: [
         { title: "Option A · one command", rows: [
           { field: "terminal", verdict: "paste",
-            value: 'claude mcp add --transport http ' + c.slug + ' ' + c.server + ' \\\n  --header "Authorization: Bearer ' + tok + '"',
-            note: "Adding does not validate anything. Run /mcp afterwards; a bad token shows as failed." }
+            value: 'claude mcp add --transport http ' + shellQuote(c.slug) + ' ' + shellQuote(c.server) + ' \\\n  --header "Authorization: Bearer ' + tok + '"',
+            note: "Requires MCP_TOKEN in your shell. This saves the header in local client configuration; keep that file private. Run /mcp afterwards to validate." }
         ]},
         { title: "Option B · committed to the repo",
           note: "Keeps the token out of git — ${MCP_TOKEN} is expanded from the environment at load time.",
@@ -286,17 +290,17 @@ function guides(c) {
       ]},
 
     { id: "verify", host: "Verify",
-      path: "any terminal",
+      path: "Bash / POSIX shell",
       lede: "Run this before blaming a host. It proves DNS, TLS, routing and the auth gate in one call.",
       groups: [
         { title: "Is the endpoint alive?", rows: [
           { field: "curl", verdict: "paste",
-            value: 'curl -sS -i -X POST ' + c.server + ' \\\n  -H "Content-Type: application/json" \\\n  -d \'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}\'',
+            value: 'curl -sS -i -X POST ' + shellQuote(c.server) + ' \\\n  -H "Accept: application/json, text/event-stream" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}\'',
             note: "A 401 with a WWW-Authenticate header is a PASS: the server is up and the auth gate works. You are ruling out 404 and a timeout." }
         ]},
         { title: "Does discovery work?",
           note: "If ChatGPT's advanced fields come up blank, this is the document that failed.",
-          rows: [{ field: "curl", verdict: "paste", value: "curl -sS " + c.protectedResource }] }
+          rows: [{ field: "curl", verdict: "paste", value: "curl -sS " + shellQuote(c.protectedResource) }] }
       ]}
   ];
 }

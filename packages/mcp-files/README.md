@@ -123,7 +123,7 @@ The model calls one tool. It never sees an upload URL, a blob registration, or a
 | Port | 443, plus anything the policy names |
 | Redirects | followed **manually**, every hop re-validated, capped |
 | Size | `content-length` for an early exit, then the **real** byte count, aborting mid-stream |
-| Type | sniffed from **magic bytes**; a body that contradicts its own `content-type` is refused |
+| Type | sniffed from **magic bytes**; a contradictory specific `content-type` is refused; absent or `application/octet-stream` headers are accepted |
 | File name | re-derived server-side; the caller's is advisory |
 | Timeout | whole-request budget via `AbortController` |
 
@@ -142,13 +142,13 @@ That is a property of your adapter, not of this package, which is why the field 
 
 ## Errors
 
-Everything throws `ConnectorError`. `toPublic()` is the only shape that may cross the wire — it carries `code`, `message`, `recoverable`, optional `fields`, and `correlation_id`, and it **drops** the `internal` property where the original throwable is kept for logs.
+Ingestion and adapter failures throw `ConnectorError`. Storage and attachment are separate operations; a failed attachment can leave a stored file or a partial adapter change. Consumers must provide any required transaction or cleanup. `toPublic()` is the only shape that may cross the wire — it carries `code`, `message`, `recoverable`, optional `fields`, and `correlation_id`, and it **drops** the `internal` property where the original throwable is kept for logs.
 
 Codes: `invalid_input`, `unauthorized`, `insufficient_scope`, `not_found`, `conflict`, `payload_too_large`, `unsupported_media_type`, `url_rejected`, `upstream_unavailable`, `timeout`, `rate_limited`, `internal`.
 
 ## Contract testing
 
-Call `assertFileParamsConformant(tool)` on every tool in your registry. It catches the four failures that are silent locally and fatal at Scan Tools: a missing property, an over-required optional, a field named in `_meta` that is not in `properties`, and any `$`-prefixed key — valid JSON Schema, but fatal to `tools/list` on any server whose RPC is a **Convex action** (see [`../../shared/convex.md`](../../shared/convex.md) §11). An `httpAction` that stringifies into a `Response` is not exposed; the check stays on regardless, because the same schema gets vendored into both and inlining costs nothing.
+Call `assertFileParamsConformant(tool)` on every tool in your registry. It catches schema drift that can fail at Scan Tools: a missing or non-string property, an over-required optional, a field named in `_meta` that is not in `properties`, and any `$`-prefixed key — valid JSON Schema, but fatal to `tools/list` on any server whose RPC is a **Convex action** (see [`../../shared/convex.md`](../../shared/convex.md) §11). An `httpAction` that stringifies into a `Response` is not exposed; the check stays on regardless, because the same schema gets vendored into both and inlining costs nothing.
 
 ```ts
 it("every tool's file params are conformant", () => {
@@ -176,7 +176,7 @@ Replace that copy with the npm dependency once the package is published.
 
 ```bash
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run  — 46 tests
+npm test            # vitest run  — 53 tests
 npm run build          # emits dist/ with .d.ts
 npm run bundle:single  # emits dist/single.ts for vendoring
 ```

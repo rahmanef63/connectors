@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, lstatSync } from "node:fs";
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
 
 const root = process.cwd();
@@ -11,14 +11,27 @@ function walk(dir) {
   for (const name of readdirSync(dir)) {
     if (ignored.has(name)) continue;
     const path = join(dir, name);
-    const stat = statSync(path);
+    const stat = lstatSync(path);
+    if (stat.isSymbolicLink()) {
+      failures.push(`${relative(root, path)}: symbolic links are not allowed in cookbook inputs`);
+      continue;
+    }
     if (stat.isDirectory()) entries.push(...walk(path));
     else entries.push(path);
   }
   return entries;
 }
 
+function exitOnFailures() {
+  if (failures.length === 0) return;
+  console.error(`Documentation contract failed (${failures.length}):`);
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
+}
+
 const files = walk(root);
+// Stop before any fixed-path reads can follow a rejected symlink.
+exitOnFailures();
 const markdown = files.filter((file) => extname(file) === ".md");
 const jsonFiles = files.filter((file) => extname(file) === ".json" && !/^tsconfig(?:\..+)?\.json$/.test(file.split(sep).at(-1) ?? ""));
 
@@ -119,13 +132,15 @@ if (notificationDispatch < 0 || notificationAck < 0 || notificationDispatch > no
 }
 
 const forbiddenArtifactDirs = [".codex-plugin", ".claude-plugin", "skills"];
+for (const file of [".app.json", ".mcp.json", "mcp.json", "plugin.json"]) {
+  if (existsSync(join(root, file))) failures.push(`${file}: generated consumer artifact must not live at cookbook root`);
+}
 for (const dir of forbiddenArtifactDirs) {
   if (existsSync(join(root, dir))) failures.push(`${dir}/: generated consumer artifact must not live at cookbook root`);
 }
 
 for (const file of files) {
   const rel = relative(root, file);
-  if (rel.startsWith(`scripts${sep}`)) continue;
   const text = readFileSync(file, "utf8");
   const appIds = text.match(/\bplugin_asdk_app_[A-Za-z0-9_-]{8,}\b/g) ?? [];
   for (const appId of appIds) {
@@ -134,15 +149,14 @@ for (const file of files) {
       failures.push(`${rel}: contains a concrete-looking ChatGPT connection id; cookbook files must use placeholders`);
     }
   }
+  if (/\b(?:(?:sk|xox[baprs])[-_]|(?:ghp|github_pat)_)[A-Za-z0-9_-]{16,}\b/.test(text)) {
+    failures.push(`${rel}: secret-shaped token detected; use an obvious placeholder`);
+  }
   if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(text)) {
     failures.push(`${rel}: contains private-key material`);
   }
 }
 
-if (failures.length > 0) {
-  console.error(`Documentation contract failed (${failures.length}):`);
-  for (const failure of failures) console.error(`- ${failure}`);
-  process.exit(1);
-}
+exitOnFailures();
 
 console.log(`Documentation contract passed: ${markdown.length} Markdown files, ${jsonFiles.length} JSON files, ${sharedDocs.length} shared guides, all local links resolved.`);
