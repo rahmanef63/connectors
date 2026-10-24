@@ -59,6 +59,20 @@ describe("checkUrl", () => {
     ]) expect(reject(`https://${h}/x.png`), h).toBe("private-address");
   });
 
+  it("rejects private IPv4 smuggled in every translating IPv6 form", () => {
+    for (const h of [
+      "[::7f00:1]", "[::a9fe:a9fe]", "[::ffff:0:7f00:1]", "[::ffff:0:a9fe:a9fe]",
+      "[64:ff9b::7f00:1]", "[64:ff9b::a9fe:a9fe]", "[64:ff9b:1::a9fe:a9fe]",
+      "[2002:7f00:1::]", "[2002:a9fe:a9fe::]",
+    ]) expect(reject(`https://${h}/x.png`), h).toBe("private-address");
+  });
+
+  it("still accepts translating IPv6 forms that embed a public IPv4", () => {
+    for (const h of ["[::808:808]", "[::ffff:0:808:808]", "[64:ff9b::808:808]", "[2002:808:808::]"]) {
+      expect(checkUrl(`https://${h}/x.png`, imagePolicy).ok, h).toBe(true);
+    }
+  });
+
   it("normalises a trailing DNS dot before checking local names", () => {
     for (const h of ["localhost.", "cdn.localhost.", "printer.local.", "svc.internal.", "metadata.google.internal."]) {
       expect(reject(`https://${h}/x.png`), h).toBe("private-address");

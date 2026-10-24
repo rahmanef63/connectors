@@ -46,6 +46,56 @@ export const documentPolicy: FetchPolicy = {
 const PRIVATE_V4 =
   /^(0\.|10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/;
 
+/** Eight hextets, or null when the text is not a plain IPv6 literal. The URL
+ *  parser has already canonicalised the address, so no dotted quad can appear
+ *  inside the brackets and no group needs re-encoding. */
+const expandV6 = (address: string): number[] | null => {
+  const halves = address.split("::");
+  if (halves.length > 2) return null;
+  const half = (part: string): number[] | null => {
+    if (part === "") return [];
+    const groups: number[] = [];
+    for (const group of part.split(":")) {
+      if (!/^[0-9a-f]{1,4}$/.test(group)) return null;
+      groups.push(parseInt(group, 16));
+    }
+    return groups;
+  };
+  const head = half(halves[0]!);
+  const tail = halves.length === 1 ? [] : half(halves[1]!);
+  if (!head || !tail) return null;
+  if (halves.length === 1) return head.length === 8 ? head : null;
+  const fill = 8 - head.length - tail.length;
+  if (fill < 1) return null;
+  return [...head, ...Array<number>(fill).fill(0), ...tail];
+};
+
+/**
+ * Every IPv4 address an IPv6 literal can smuggle, as dotted quads.
+ *
+ * The mapped form (`::ffff:7f00:1`) is the famous one but not the only one:
+ * IPv4-compatible (`::7f00:1`), IPv4-translated (`::ffff:0:7f00:1`), the NAT64
+ * well-known prefix (`64:ff9b::7f00:1`, and `64:ff9b:1::/48`) and 6to4
+ * (`2002:7f00:1::`) all reach the same host on a network that translates them.
+ * A guard that only knows `::ffff:` waves the rest through.
+ */
+const embeddedV4 = (g: readonly number[]): string[] => {
+  const quad = (hi: number, lo: number): string => `${hi >>> 8}.${hi & 255}.${lo >>> 8}.${lo & 255}`;
+  const zeroes = (from: number, to: number): boolean => g.slice(from, to).every((x) => x === 0);
+  const out: string[] = [];
+  // ::/96 IPv4-compatible, and ::ffff:0:0/96 IPv4-mapped.
+  if (zeroes(0, 5) && (g[5] === 0 || g[5] === 0xffff)) out.push(quad(g[6]!, g[7]!));
+  // ::ffff:0:0/96 IPv4-translated (SIIT).
+  if (zeroes(0, 4) && g[4] === 0xffff && g[5] === 0) out.push(quad(g[6]!, g[7]!));
+  // 64:ff9b::/96 and 64:ff9b:1::/48 NAT64.
+  if (g[0] === 0x64 && g[1] === 0xff9b && (zeroes(2, 6) || (g[2] === 1 && zeroes(3, 6)))) {
+    out.push(quad(g[6]!, g[7]!));
+  }
+  // 2002::/16 6to4 — the embedded address is the 32 bits after the prefix.
+  if (g[0] === 0x2002) out.push(quad(g[1]!, g[2]!));
+  return out;
+};
+
 /**
  * Hostname-level guard.
  *
@@ -72,13 +122,8 @@ export function checkUrl(raw: string, policy: FetchPolicy): { ok: true; url: URL
 
   const h = url.hostname.toLowerCase().replace(/\.$/, "");
   const isV6 = h.startsWith("[") && h.endsWith("]");
-  const v6 = isV6 ? h.slice(1, -1) : "";
-  // URL canonicalises mapped IPv4 literals to two hexadecimal groups.
-  const mappedV4 = /^::ffff:([0-9a-f]+):([0-9a-f]+)$/.exec(v6);
-  const mappedAddress = mappedV4
-    ? [parseInt(mappedV4[1]!, 16) >>> 8, parseInt(mappedV4[1]!, 16) & 255,
-       parseInt(mappedV4[2]!, 16) >>> 8, parseInt(mappedV4[2]!, 16) & 255].join(".")
-    : "";
+  const g = isV6 ? expandV6(h.slice(1, -1)) : null;
+  const smuggled = g ? embeddedV4(g) : [];
   const isPrivate =
     h === "localhost" ||
     h.endsWith(".localhost") ||
@@ -86,12 +131,11 @@ export function checkUrl(raw: string, policy: FetchPolicy): { ok: true; url: URL
     h.endsWith(".internal") ||
     h === "metadata.google.internal" ||
     PRIVATE_V4.test(h) ||
-    (isV6 && (
-      v6 === "::" ||
-      v6 === "::1" ||
-      /^f[cd][0-9a-f]{2}:/.test(v6) ||
-      /^fe[89ab][0-9a-f]:/.test(v6) ||
-      (mappedAddress !== "" && PRIVATE_V4.test(mappedAddress))
+    (g !== null && (
+      g.every((x) => x === 0) ||
+      /^f[cd]/.test(g[0]!.toString(16).padStart(4, "0")) ||
+      /^fe[89ab]/.test(g[0]!.toString(16).padStart(4, "0")) ||
+      smuggled.some((address) => PRIVATE_V4.test(address))
     ));
   if (isPrivate) return { ok: false, reason: "private-address" };
 

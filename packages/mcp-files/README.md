@@ -118,7 +118,7 @@ The model calls one tool. It never sees an upload URL, a blob registration, or a
 | Check | Behaviour |
 |---|---|
 | Scheme | `https:` only |
-| Address | loopback, RFC1918, link-local, CGNAT, `.internal`/`.local`, IPv6 ULA and the cloud metadata IP all refused |
+| Address | loopback, RFC1918, link-local, CGNAT, `.internal`/`.local`, IPv6 ULA and the cloud metadata IP all refused, including private IPv4 embedded in IPv4-compatible, IPv4-mapped, IPv4-translated, NAT64 or 6to4 literals |
 | Credentials in URL | refused |
 | Port | 443, plus anything the policy names |
 | Redirects | followed **manually**, every hop re-validated, capped |
