@@ -1,7 +1,7 @@
 # AGENTS.md
 
 **Scope:** the entry point for an agent reading this repo cold — full file map, reading order per goal, and the invariants your output must not break.
-**Assumes:** you were pointed here to write or debug an AI integration in *another* codebase. Markdown is read-only guidance; `packages/`, `scripts/` and CI are the only executable repository tooling.
+**Assumes:** you were pointed here to write or debug an AI integration in *another* codebase. Markdown is read-only guidance; `packages/`, `scripts/`, `.manef/_generated/` and CI are the only executable repository tooling.
 
 ## Goal
 
@@ -18,8 +18,12 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 | `README.md` | human router: thesis, folder decision table, dependency line, license |
 | `AGENTS.md` | this file — agent router |
 | `LICENSE` | MIT, 2026 rahmanef63 |
+| `.agents/skills/mcp-project-builder/` | end-to-end builder skill — orchestrates build/productionize; routes to guides; does not replace them |
+| `.manef/` | versioned MANEF AI module foundation — `module.json` descriptor, `foundation.lock.json`, offline `check-module.mjs` (layout/descriptor only; grants no execution) |
+| `examples/connector-setup/` | working setup-card example + Node test suite (Bash + Node 22.13+/23.2+) |
 | `packages/mcp-files/` | **code** — shared OpenAI file-input contract: schema builders, SSRF-safe ingestion, store/attach adapter seams |
 | `scripts/check-docs.mjs` | executable cookbook contract: headers, local links, shared-router count, placeholder/secret/root-artifact guards |
+| `scripts/check-builder-skill.mjs` | executable builder-skill contract: required skill files, routing pointers, no duplicated SSOT chapters |
 | `cn-mcp-core/README.md` | the design invariant, the phase decision tree, framework/DB adaptation notes, spec links |
 | `cn-mcp-core/phase-1-bearer.md` | the endpoint: JSON-RPC dispatch, bearer auth, tool registry |
 | `cn-mcp-core/phase-2-oauth.md` | the authorization half: consent page, auth codes, token exchange, discovery documents |
@@ -38,6 +42,7 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 | `shared/icons.md` | every image a connector needs — MCP's `Icon` schema, OpenAI's two required squares, Claude's absent field, one asset set for all three |
 | `shared/pitfalls.md` | 20 real failures, symptom → root cause → fix |
 | `shared/security-checklist.md` | pass/fail gate before the endpoint is reachable by anyone |
+| `shared/versioning.md` | additive vs breaking edits to a live tool, grant, protocol or reviewed plugin snapshot |
 | `cn-claude-plugin/README.md` | connector vs plugin, the surface picker, the claude.ai connector path |
 | `cn-claude-plugin/manifest.md` | `plugin.json` fields, component directories, `${CLAUDE_PLUGIN_ROOT}`, local testing |
 | `cn-claude-plugin/marketplace.md` | `marketplace.json`, `/plugin install`, what catalog submission actually is |
@@ -53,6 +58,7 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 | Goal | Order |
 |---|---|
 | **Build/productionize end to end** | `.agents/skills/mcp-project-builder/SKILL.md` → copy its build-plan asset when useful → open only the canonical guides it routes to → finish with deployed + host acceptance |
+| **Verify MANEF module foundation** | `.manef/README.md` → compare `foundation.lock.json` hashes before adopting a new foundation version → `node .manef/_generated/check-module.mjs` (descriptor + layout paths only; does not run declared commands or live readiness) |
 | **Build the server core manually** | `cn-mcp-core/README.md` → `cn-mcp-core/phase-1-bearer.md` → `shared/tool-design.md` → `shared/transport.md` → `shared/modern-protocol.md` *(dual-stack/stateless only)* → `shared/results.md` → `shared/convex.md` *(Convex only)* → `cn-mcp-core/phase-2-oauth.md` + `shared/oauth.md` *(consumer hosts)* → `cn-mcp-core/phase-3-admin-ui.md` → `shared/testing.md` → `shared/security-checklist.md` |
 | **Accept an image or file** | `shared/file-inputs.md` — the whole contract, both directions → `shared/convex.md` *(Convex: `$`-keys are fatal here)* → `shared/security-checklist.md` |
 | **Ship the setup UI** | `shared/setup-form.md` — the spec, read it first → `cn-mcp-core/phase-3-admin-ui.md` *(what the card sits inside)* → `shared/clients.md` *(per-host detail behind a tab)* → `shared/icons.md` *(only if the card carries branding)* |
@@ -65,7 +71,8 @@ Every Markdown file here is guidance; there are no dated reports to skip. Readin
 
 - **One server, host-agnostic.** It lives in `cn-mcp-core/` and nowhere else. If a sentence you are about to write branches server behaviour by which AI is calling, delete it.
 - **`cn-claude-plugin/` and `cn-gpt-plugin/` assume `cn-mcp-core/` is built and deployed. `cn-gpts/` does not.**
-- **The guide folders are not consumer packages.** Keep `.codex-plugin/`, `.claude-plugin/`, `.app.json`, `.mcp.json` and `skills/` out of cookbook root; show them in fenced examples and generate them only in the user's target project. `packages/` and repository validation tooling are the deliberate executable exceptions.
+- **The guide folders are not consumer packages.** Keep `.codex-plugin/`, `.claude-plugin/`, `.app.json`, `.mcp.json` and `skills/` out of cookbook root; show them in fenced examples and generate them only in the user's target project. `packages/`, `.manef/_generated/` and repository validation tooling are the deliberate executable exceptions.
+- **`.manef/` is integration metadata, not a product runtime.** Capability declarations grant no execution authority. Native tests and lockfiles stay authoritative. Update by reviewing a new foundation version — never by silently replacing native config.
 - **Every file opens with an H1, then exactly `**Scope:**` and `**Assumes:**`, in that order, before anything else.** Tables over paragraphs. No filler, no marketing.
 - **Honesty beats fluency.** If a claim is not confirmed by a doc you actually fetched or a file you actually read, write `TODO: verify` inline. A confident wrong registration requirement costs the reader hours.
 - **Keep reusable instructions product-neutral.** No deployment id, customer hostname, credential or project-specific endpoint belongs in a template. The builder's `reference-patterns.md` may name reviewed implementations such as MSO/CareerPack/Connectors Gateway only as provenance; never copy their deployment-specific values into a target.
@@ -85,6 +92,6 @@ Use a rendering fetch/browser when a plain fetch has no article body. If blocked
 1. Every path you cite resolves — in this repo and in the target codebase.
 2. Every host-specific claim is either sourced or marked `TODO: verify`. If you close one, delete its row from the **What is still unverified** table in [`README.md`](./README.md); if you open a new one, add a row. That table is the index and it goes stale silently.
 3. No server logic branches on the calling host.
-4. Run `node scripts/check-docs.mjs`, `node scripts/check-builder-skill.mjs`, `node --test scripts/test/*.test.mjs` and `node --test examples/connector-setup/connector-setup.test.mjs` (Node 22.13+ on 22.x or 23.2+; Bash required for the setup suite); when `packages/mcp-files/` changed, also run its locked install, typecheck, tests and build.
+4. Run `node scripts/check-docs.mjs`, `node scripts/check-builder-skill.mjs`, `node .manef/_generated/check-module.mjs`, `node --test scripts/test/*.test.mjs` and `node --test examples/connector-setup/connector-setup.test.mjs` (Node 22.13+ on 22.x or 23.2+; Bash required for the setup suite); when `packages/mcp-files/` changed, also run its locked install, typecheck, tests and build.
 5. For implementation work, do not finish at source/build proof: verify the deployed MCP and refresh/rescan the actual host when the public contract changed.
 6. Report which files you actually read, so the next agent can skip them.
