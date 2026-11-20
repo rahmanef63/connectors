@@ -4,7 +4,7 @@ import { dirname, extname, join, relative, resolve, sep } from "node:path";
 
 const root = process.cwd();
 const failures = [];
-const ignored = new Set([".git", "node_modules", "dist"]);
+const ignored = new Set([".git", "node_modules", "dist", ".mso", "mso.md"]);
 
 function walk(dir) {
   const entries = [];

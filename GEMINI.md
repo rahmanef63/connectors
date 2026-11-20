@@ -1,4 +1,7 @@
-# Gemini Instructions
+# GEMINI.md
+
+**Scope:** Gemini-specific agent entry point for this repository; defers cookbook routing and invariants to [`AGENTS.md`](./AGENTS.md).
+**Assumes:** you are working in this repository locally and need local MSO integration context lookup rules.
 
 <!-- mso-local-context -->
 ## Local Integration & Credential Context

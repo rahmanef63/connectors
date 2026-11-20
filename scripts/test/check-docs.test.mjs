@@ -15,7 +15,7 @@ function fixture() {
   const root = join(scratch, String(++sequence));
   cpSync(source, root, {
     recursive: true,
-    filter: (path) => ![".git", "node_modules", "dist"].includes(basename(path)),
+    filter: (path) => ![".git", "node_modules", "dist", ".mso", "mso.md"].includes(basename(path)),
   });
   return root;
 }
