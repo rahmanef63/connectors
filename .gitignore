@@ -10,3 +10,7 @@ node_modules/
 
 # Local MSO runtime state — never commit
 .mso/
+
+# Local MSO integration/credential context (never commit)
+mso.md
+.mso/mso.md

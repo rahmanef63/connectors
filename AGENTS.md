@@ -95,3 +95,7 @@ Use a rendering fetch/browser when a plain fetch has no article body. If blocked
 4. Run `node scripts/check-docs.mjs`, `node scripts/check-builder-skill.mjs`, `node .manef/_generated/check-module.mjs`, `node --test scripts/test/*.test.mjs` and `node --test examples/connector-setup/connector-setup.test.mjs` (Node 22.13+ on 22.x or 23.2+; Bash required for the setup suite); when `packages/mcp-files/` changed, also run its locked install, typecheck, tests and build.
 5. For implementation work, do not finish at source/build proof: verify the deployed MCP and refresh/rescan the actual host when the public contract changed.
 6. Report which files you actually read, so the next agent can skip them.
+
+<!-- mso-local-context -->
+## Local Integration & Credential Context
+Before running GitHub (`git`/`gh`/API) or external provider operations, check local gitignored `mso.md` (or `.mso/mso.md`) in this repository root if present. It specifies the intended MSO integration user and connection for this project. Never commit `mso.md`, `.mso/mso.md`, or raw credentials.
